@@ -1,0 +1,96 @@
+.shape-showcase {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 40px 24px 56px;
+  text-align: left;
+}
+
+.hero-block {
+  margin-bottom: 26px;
+
+  p {
+    color: var(--text);
+    max-width: 760px;
+  }
+}
+
+h2 {
+  margin-bottom: 14px;
+}
+
+h3 {
+  margin: 0 0 12px;
+  font-size: 18px;
+  color: var(--text-h);
+}
+
+.primitives-grid,
+.examples-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.card {
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--bg) 88%, #eef6ff);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  svg {
+    width: 100%;
+    height: auto;
+  }
+}
+
+.encoded-shape {
+  display: grid;
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.shape-stack {
+  position: relative;
+  margin: 0 auto;
+}
+
+.stack-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: center;
+}
+
+.quarter-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shape-error {
+  font-size: 14px;
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.example-code {
+  margin-top: 8px;
+  text-align: center;
+  font-family: var(--mono);
+  color: var(--text-h);
+}
+
+@media (max-width: 700px) {
+  .shape-showcase {
+    padding-inline: 14px;
+  }
+}
