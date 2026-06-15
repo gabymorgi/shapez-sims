@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { Shape } from '../models/Shape'
+import { codeToShape, type Shape } from '../utils/Shape'
 
 type Orientation = 'nw' | 'ne' | 'se' | 'sw'
 type QuarterKind = 'circle' | 'square' | 'spike' | 'wedge'
@@ -302,7 +302,7 @@ export function EncodedShape({ code, quarterSize = 72, gap = 0 }: EncodedShapePr
   let shape: Shape
 
   try {
-    shape = Shape.fromCode(code.trim())
+    shape = codeToShape(code.trim())
   } catch {
     return <div className="shape-error">Invalid code: {code} (expected 1-4 layers of 8-char shapes, using [C|R|S|W|c][color], P-, or -- per quarter)</div>
   }

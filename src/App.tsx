@@ -2,7 +2,6 @@ import './App.css'
 import {
   EncodedShape,
 } from './components/QuarterShapes'
-import { Shape } from './models/Shape'
 
 function App() {
   const examples = [
@@ -29,9 +28,6 @@ function App() {
           <hr />
         <div className="examples-grid">
           <EncodedShape code="CrCbP-Cw:cyCrP-Rb:WucgP---:cwcwccRy" />
-          <EncodedShape code={Shape.fromCode(
-            "CrCbP-Cw:cyCrP-Rb:WucgP---:cwcwccRy"
-          ).rotate('clockwise').toString()} />
         </div>
       </section>
     </main>
