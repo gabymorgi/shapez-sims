@@ -1,80 +1,38 @@
-import { cloneShape, type Shape } from './Shape'
-import type { Simulator } from './Simulator'
-
-export type Throughput = [number, number]
+import { createShapeProduct } from './simulator/productHelpers.ts'
+import { SimulatorEdge, type ShapeProduct, type SimulatorNode } from './Simulator.ts'
+import type { Shape } from './Shape.ts'
 
 type NodeId = string
 type VisitState = 'gray' | 'black'
 
-export interface SimulatorNodeOptions {
-  id: string
-  simulator: Simulator
-  throughput: Throughput
-  inputIds?: Iterable<string>
-  outputIds?: Iterable<string>
-}
-
-export class SimulatorNode {
-  public readonly id: string
-  public readonly simulator: Simulator
-  public readonly throughput: Throughput
-  public readonly inputIds: Set<string>
-  public readonly outputIds: Set<string>
-
-  constructor({ id, simulator, throughput = [120, 120], inputIds = [], outputIds = [] }: SimulatorNodeOptions) {
-    if (id.trim().length === 0) {
-      throw new Error('Node id cannot be empty.')
-    }
-
-    this.id = id
-    this.simulator = simulator
-    this.throughput = [throughput[0], throughput[1]]
-    this.inputIds = new Set(inputIds)
-    this.outputIds = new Set(outputIds)
-  }
-
-  public addInput(inputId: string): boolean {
-    const beforeSize = this.inputIds.size
-    this.inputIds.add(inputId)
-    return this.inputIds.size > beforeSize
-  }
-
-  public removeInput(inputId: string): boolean {
-    return this.inputIds.delete(inputId)
-  }
-
-  public addOutput(outputId: string): boolean {
-    const beforeSize = this.outputIds.size
-    this.outputIds.add(outputId)
-    return this.outputIds.size > beforeSize
-  }
-
-  public removeOutput(outputId: string): boolean {
-    return this.outputIds.delete(outputId)
-  }
-}
-
 export class SimulatorGraph {
   private readonly nodeMap: Map<NodeId, SimulatorNode>
+  private readonly edgeMap: Map<string, SimulatorEdge>
+  private isValidated = false
 
-  constructor(nodes: SimulatorNode[] = []) {
+  constructor() {
     const map = new Map<NodeId, SimulatorNode>()
 
-    for (const node of nodes) {
-      if (map.has(node.id)) {
-        throw new Error(`Duplicate node id: ${node.id}`)
-      }
-      map.set(node.id, node)
-    }
+    // for (const node of nodes) {
+    //   if (map.has(node.id)) {
+    //     throw new Error(`Duplicate node id: ${node.id}`)
+    //   }
+    //   map.set(node.id, node)
+    // }
 
-    SimulatorGraph.assertAdjacencyConsistency(map)
-    SimulatorGraph.assertAcyclic(map)
+    // SimulatorGraph.assertAdjacencyConsistency(map)
+    // SimulatorGraph.assertAcyclic(map)
 
     this.nodeMap = map
-  }
+    this.edgeMap = new Map<string, SimulatorEdge>()
 
-  public static empty(): SimulatorGraph {
-    return new SimulatorGraph()
+    // for (const node of map.values()) {
+    //   for (const outputId of node.outputIds) {
+    //     const edge = this.createEdge(node.id, outputId)
+    //     node.attachOutputEdge(edge)
+    //     this.getNodeOrThrow(outputId).attachInputEdge(edge)
+    //   }
+    // }
   }
 
   public get size(): number {
@@ -86,7 +44,7 @@ export class SimulatorGraph {
   }
 
   public get roots(): SimulatorNode[] {
-    return this.nodes.filter((node) => node.inputIds.size === 0)
+    return this.nodes.filter((node) => node.inputEdges.length === 0)
   }
 
   public get rootIds(): string[] {
@@ -94,7 +52,7 @@ export class SimulatorGraph {
   }
 
   public get leaves(): SimulatorNode[] {
-    return this.nodes.filter((node) => node.outputIds.size === 0)
+    return this.nodes.filter((node) => node.outputEdges.length === 0)
   }
 
   public get leafIds(): string[] {
@@ -109,14 +67,13 @@ export class SimulatorGraph {
     return this.nodeMap.get(nodeId)
   }
 
-  public getInputs(nodeId: string): SimulatorNode[] {
-    const node = this.getNodeOrThrow(nodeId)
-    return Array.from(node.inputIds, (inputId) => this.getNodeOrThrow(inputId))
-  }
+  private getNodeOrThrow(nodeId: string): SimulatorNode {
+    const node = this.nodeMap.get(nodeId)
+    if (!node) {
+      throw new Error(`Unknown node: ${nodeId}`)
+    }
 
-  public getOutputs(nodeId: string): SimulatorNode[] {
-    const node = this.getNodeOrThrow(nodeId)
-    return Array.from(node.outputIds, (outputId) => this.getNodeOrThrow(outputId))
+    return node
   }
 
   public addNode(node: SimulatorNode): void {
@@ -125,8 +82,7 @@ export class SimulatorGraph {
     }
 
     this.nodeMap.set(node.id, node)
-    SimulatorGraph.assertAdjacencyConsistencyForNode(this.nodeMap, node.id)
-    SimulatorGraph.assertAcyclicForNode(this.nodeMap, node.id, new Map<NodeId, VisitState>())
+    this.isValidated = false
   }
 
   public removeNode(nodeId: string): void {
@@ -135,13 +91,17 @@ export class SimulatorGraph {
     }
 
     const markedNode = this.getNodeOrThrow(nodeId)
+
     for (const inputId of markedNode.inputIds) {
+      this.edgeMap.delete(SimulatorGraph.edgeKey(inputId, nodeId))
       const inputNode = this.getNodeOrThrow(inputId)
-      inputNode.removeOutput(nodeId)
+      inputNode.detachOutputEdge(nodeId)
     }
+
     for (const outputId of markedNode.outputIds) {
+      this.edgeMap.delete(SimulatorGraph.edgeKey(nodeId, outputId))
       const outputNode = this.getNodeOrThrow(outputId)
-      outputNode.removeInput(nodeId)
+      outputNode.detachInputEdge(nodeId)
     }
 
     this.nodeMap.delete(nodeId)
@@ -160,64 +120,81 @@ export class SimulatorGraph {
     }
 
     if (!SimulatorGraph.hasPath(this.nodeMap, toId, fromId)) {
-      fromNode.addOutput(toId)
-      toNode.addInput(fromId)
+      const edge = this.createEdge(fromId, toId)
+      fromNode.attachOutputEdge(edge)
+      toNode.attachInputEdge(edge)
       return
     }
   }
 
   public disconnect(fromId: string, toId: string): void {
-    const sourceNode = this.getNodeOrThrow(fromId)
-    const targetNode = this.getNodeOrThrow(toId)
+    const fromNode = this.getNodeOrThrow(fromId)
+    const toNode = this.getNodeOrThrow(toId)
 
-    sourceNode.removeOutput(toId)
-    targetNode.removeInput(fromId)
+    this.edgeMap.delete(SimulatorGraph.edgeKey(fromId, toId))
+    fromNode.detachOutputEdge(toId)
+    toNode.detachInputEdge(fromId)
   }
 
-  // public simulate(rootInputs: Readonly<Record<string, Shape[]>> = {}): Record<string, Shape[]> {
-  //   const orderedNodeIds = this.topologicalOrder()
-  //   const nodeOutputs: Record<string, Shape[]> = {}
+  public simulate(rootInputs: Readonly<Record<string, Shape[]>> = {}): Record<string, Shape[]> {
+    const orderedNodeIds = this.topologicalOrder()
+    const nodeOutputs: Record<string, Shape[]> = {}
 
-  //   for (const nodeId of orderedNodeIds) {
-  //     const node = this.getNodeOrThrow(nodeId)
-  //     const upstreamInputs: Shape[] = []
-  //     for (const inputId of node.inputIds) {
-  //       const output = nodeOutputs[inputId]
-  //       if (!output) {
-  //         continue
-  //       }
-
-  //       upstreamInputs.push(...output.map(cloneShape))
-  //     }
-
-  //     const rootInput = rootInputs[nodeId] ? rootInputs[nodeId].map(cloneShape) : []
-  //     const effectiveInputs = node.inputIds.size === 0 ? rootInput : upstreamInputs
-
-  //     nodeOutputs[nodeId] = node.simulator.simulate(effectiveInputs)
-  //   }
-
-  //   return nodeOutputs
-  // }
-
-  private hasEdge(fromId: string, toId: string): boolean {
-    const node = this.getNodeOrThrow(fromId)
-    return node.outputIds.has(toId)
-  }
-
-  private getNodeOrThrow(nodeId: string): SimulatorNode {
-    const node = this.nodeMap.get(nodeId)
-    if (!node) {
-      throw new Error(`Unknown node: ${nodeId}`)
+    for (const node of this.nodeMap.values()) {
+      node.resetTickState()
     }
 
-    return node
+    for (const [nodeId, shapes] of Object.entries(rootInputs)) {
+      const node = this.getNode(nodeId)
+      if (!node) {
+        continue
+      }
+
+      for (const shape of shapes) {
+        node.enqueueExternalInput(createShapeProduct(shape))
+      }
+    }
+
+    for (const nodeId of orderedNodeIds) {
+      const node = this.getNodeOrThrow(nodeId)
+      node.simulate()
+
+      const emitted = node.drainTickOutputs()
+      const shapeOutputs = emitted
+        .filter((product): product is ShapeProduct => product.type === 'shape')
+        .map((product) => product.shape)
+
+      nodeOutputs[nodeId] = shapeOutputs
+    }
+
+    return nodeOutputs
+  }
+
+  private hasEdge(fromId: string, toId: string): boolean {
+    return this.edgeMap.has(SimulatorGraph.edgeKey(fromId, toId))
+  }
+
+  private createEdge(fromId: string, toId: string): SimulatorEdge {
+    const key = SimulatorGraph.edgeKey(fromId, toId)
+    const existing = this.edgeMap.get(key)
+    if (existing) {
+      return existing
+    }
+
+    const edge = new SimulatorEdge(fromId, toId)
+    this.edgeMap.set(key, edge)
+    return edge
+  }
+
+  private static edgeKey(fromId: string, toId: string): string {
+    return `${fromId}->${toId}`
   }
 
   public topologicalOrder(): string[] {
     const indegrees = new Map<string, number>()
 
     for (const node of this.nodeMap.values()) {
-      indegrees.set(node.id, node.inputIds.size)
+      indegrees.set(node.id, node.inputEdges.length)
     }
 
     const queue = Array.from(indegrees.entries())
@@ -239,7 +216,7 @@ export class SimulatorGraph {
         continue
       }
 
-      for (const outputId of node.outputIds) {
+      for (const outputId of node.outputEdges.map((edge) => edge.toId)) {
         const current = indegrees.get(outputId)
         if (current === undefined) {
           continue
@@ -261,42 +238,45 @@ export class SimulatorGraph {
     return ordered
   }
 
-  private static assertAdjacencyConsistencyForNode(nodeMap: Map<NodeId, SimulatorNode>, nodeId: string): void {
-    const node = nodeMap.get(nodeId)
-    if (!node) {
-      throw new Error(`Unknown node: ${nodeId}`)
-    }
+  // private static assertAdjacencyConsistencyForNode(nodeMap: Map<NodeId, SimulatorNode>, nodeId: string): void {
+  //   const node = nodeMap.get(nodeId)
+  //   if (!node) {
+  //     throw new Error(`Unknown node: ${nodeId}`)
+  //   }
 
-    for (const inputId of node.inputIds) {
-      const inputNode = nodeMap.get(inputId)
-      if (!inputNode) {
-        throw new Error(`Node ${node.id} has unknown input node: ${inputId}`)
-      }
+  //   for (const inputId of node.inputIds) {
+  //     const inputNode = nodeMap.get(inputId)
+  //     if (!inputNode) {
+  //       throw new Error(`Node ${node.id} has unknown input node: ${inputId}`)
+  //     }
 
-      if (!inputNode.outputIds.has(node.id)) {
-        throw new Error(`Input/output mismatch for ${inputId} -> ${node.id}`)
-      }
-    }
+  //     if (!inputNode.outputIds.has(node.id)) {
+  //       throw new Error(`Input/output mismatch for ${inputId} -> ${node.id}`)
+  //     }
+  //   }
 
-    for (const outputId of node.outputIds) {
-      const outputNode = nodeMap.get(outputId)
-      if (!outputNode) {
-        throw new Error(`Node ${node.id} has unknown output node: ${outputId}`)
-      }
+  //   for (const outputId of node.outputIds) {
+  //     const outputNode = nodeMap.get(outputId)
+  //     if (!outputNode) {
+  //       throw new Error(`Node ${node.id} has unknown output node: ${outputId}`)
+  //     }
 
-      if (!outputNode.inputIds.has(node.id)) {
-        throw new Error(`Output/input mismatch for ${node.id} -> ${outputId}`)
-      }
-    }
-  }
+  //     if (!outputNode.inputIds.has(node.id)) {
+  //       throw new Error(`Output/input mismatch for ${node.id} -> ${outputId}`)
+  //     }
+  //   }
+  // }
 
-  private static assertAdjacencyConsistency(nodeMap: Map<NodeId, SimulatorNode>): void {
-    for (const node of nodeMap.values()) {
-      SimulatorGraph.assertAdjacencyConsistencyForNode(nodeMap, node.id)
-    }
-  }
+  // private static assertAdjacencyConsistency(nodeMap: Map<NodeId, SimulatorNode>): void {
+  //   for (const node of nodeMap.values()) {
+  //     SimulatorGraph.assertAdjacencyConsistencyForNode(nodeMap, node.id)
+  //   }
+  // }
 
-  private static assertAcyclicForNode(nodeMap: Map<NodeId, SimulatorNode>, nodeId: string, visitState: Map<NodeId, VisitState>): void {
+  private assertAcyclicForNode(
+    nodeId: string,
+    visitState: Map<NodeId, VisitState> = new Map<NodeId, VisitState>()
+  ): void {
     const state = visitState.get(nodeId)
 
     // Back-edge to a node in the current DFS stack means a cycle.
@@ -311,29 +291,31 @@ export class SimulatorGraph {
 
     visitState.set(nodeId, 'gray')
 
-    const node = nodeMap.get(nodeId)
+    const node = this.nodeMap.get(nodeId)
 
     if (!node) {
       throw new Error(`Unknown node: ${nodeId}`)
     }
 
-    for (const outputId of node.outputIds) {
-      SimulatorGraph.assertAcyclicForNode(nodeMap, outputId, visitState)
+    for (const outputEdge of node.outputEdges) {
+      this.assertAcyclicForNode(outputEdge.toId, visitState)
     }
 
     visitState.set(nodeId, 'black')
   }
 
-  private static assertAcyclic(nodeMap: Map<NodeId, SimulatorNode>): void {
+  private assertAcyclic(): void {
     const visitState = new Map<NodeId, VisitState>()
 
-    for (const node of nodeMap.values()) {
+    for (const node of this.nodeMap.values()) {
       if (visitState.get(node.id) === 'black') {
         continue
       }
 
-      SimulatorGraph.assertAcyclicForNode(nodeMap, node.id, visitState)
+      this.assertAcyclicForNode(node.id, visitState)
     }
+
+    this.isValidated = true
   }
 
   private static hasPath(nodeMap: Map<NodeId, SimulatorNode>, fromId: string, targetId: string): boolean {
@@ -357,7 +339,7 @@ export class SimulatorGraph {
         continue
       }
 
-      for (const nextId of currentNode.outputIds) {
+      for (const nextId of currentNode.outputEdges.map((edge) => edge.toId)) {
         if (nextId === targetId) {
           return true
         }

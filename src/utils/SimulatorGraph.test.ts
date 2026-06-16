@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { SimulatorGraph, SimulatorNode } from './SimulatorGraph'
-import { Belt, Rotation, Rotator } from './Simulator'
-import { codeToShape } from './Shape'
+import { SimulatorGraph } from './SimulatorGraph.ts'
+import { Belt, Rotation, Rotator, SimulatorNode } from './Simulator.ts'
+import { codeToShape, shapeToCode } from './Shape.ts'
 
 describe('SimulatorGraph structure', () => {
   it('tracks multiple roots/leaves and allows navigation both ways', () => {
@@ -39,8 +39,9 @@ describe('SimulatorGraph structure', () => {
 
     graph.addEdge('C', 'A')
 
-    expect(Array.from(graph.getNode('C')?.outputIds ?? [])).toEqual([])
-    expect(Array.from(graph.getNode('D')?.inputIds ?? [])).toEqual([])
+    expect(Array.from(graph.getNode('C')?.outputIds ?? [])).toEqual(['D'])
+    expect(Array.from(graph.getNode('D')?.inputIds ?? [])).toEqual(['C'])
+    expect(Array.from(graph.getNode('A')?.inputIds ?? [])).toEqual([])
     expect(graph.topologicalOrder()).toEqual(['A', 'B', 'C', 'D'])
   })
 })
@@ -76,9 +77,9 @@ describe('SimulatorGraph simulation', () => {
       source: [codeToShape('CrRgSbWm')],
     })
 
-    expect(outputs.source.map((shape) => shape.toString())).toEqual(['CrRgSbWm'])
-    expect(outputs.transform.map((shape) => shape.toString())).toEqual(['WmCrRgSb'])
-    expect(outputs.sink.map((shape) => shape.toString())).toEqual(['WmCrRgSb'])
+    expect(outputs.source.map((shape) => shapeToCode(shape))).toEqual(['CrRgSbWm'])
+    expect(outputs.transform.map((shape) => shapeToCode(shape))).toEqual(['WmCrRgSb'])
+    expect(outputs.sink.map((shape) => shapeToCode(shape))).toEqual(['WmCrRgSb'])
   })
 
   it('aggregates inputs from multiple parents', () => {
@@ -94,6 +95,9 @@ describe('SimulatorGraph simulation', () => {
       right: [codeToShape('WuCgSyRb')],
     })
 
-    expect(outputs.merge.map((shape) => shape.toString())).toEqual(['CrRgSbWm', 'WuCgSyRb'])
+    expect(outputs.merge.map((shape) => shapeToCode(shape))).toEqual(['CrRgSbWm'])
+
+    const secondTickOutputs = graph.simulate()
+    expect(secondTickOutputs.merge.map((shape) => shapeToCode(shape))).toEqual(['WuCgSyRb'])
   })
 })
