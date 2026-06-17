@@ -1,5 +1,5 @@
-import type { Product } from '../Simulator.ts'
-import type { NodeSimulator, SimulatorNode } from './SimulatorNode.ts'
+import type { Product } from './Simulator.ts'
+import type { NodeSimulator, SimulatorNode } from '../simulatorGraph/SimulatorNode.ts'
 
 export class Belt implements NodeSimulator {
   private bufferedProduct: Product | null = null

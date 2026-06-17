@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { SimulatorGraph } from './SimulatorGraph.ts'
-import { Belt, Rotation, Rotator, SimulatorNode } from './Simulator.ts'
-import { codeToShape, shapeToCode } from './Shape.ts'
+import { Belt, Rotation, Rotator, SimulatorNode } from '../Simulator.ts'
+import { codeToShape, shapeToCode } from '../Shape.ts'
 
 describe('SimulatorGraph structure', () => {
   it('tracks multiple roots/leaves and allows navigation both ways', () => {

@@ -1,6 +1,6 @@
-import { createShapeProduct } from './simulator/productHelpers.ts'
-import { SimulatorEdge, type ShapeProduct, type SimulatorNode } from './Simulator.ts'
-import type { Shape } from './Shape.ts'
+import { createShapeProduct } from '../simulator/productHelpers.ts'
+import { SimulatorEdge, type ShapeProduct, type SimulatorNode } from '../Simulator.ts'
+import type { Shape } from '../Shape.ts'
 
 type NodeId = string
 type VisitState = 'gray' | 'black'
@@ -92,16 +92,16 @@ export class SimulatorGraph {
 
     const markedNode = this.getNodeOrThrow(nodeId)
 
-    for (const inputId of markedNode.inputIds) {
-      this.edgeMap.delete(SimulatorGraph.edgeKey(inputId, nodeId))
+    for (const inputId of markedNode.inputEdges.map((edge) => edge.fromId)) {
       const inputNode = this.getNodeOrThrow(inputId)
       inputNode.detachOutputEdge(nodeId)
+      this.edgeMap.delete(SimulatorGraph.edgeKey(inputId, nodeId))
     }
 
-    for (const outputId of markedNode.outputIds) {
-      this.edgeMap.delete(SimulatorGraph.edgeKey(nodeId, outputId))
+    for (const outputId of markedNode.outputEdges.map((edge) => edge.toId)) {
       const outputNode = this.getNodeOrThrow(outputId)
       outputNode.detachInputEdge(nodeId)
+      this.edgeMap.delete(SimulatorGraph.edgeKey(nodeId, outputId))
     }
 
     this.nodeMap.delete(nodeId)
@@ -112,22 +112,22 @@ export class SimulatorGraph {
       throw new Error('A node cannot be connected to itself.')
     }
 
-    const fromNode = this.getNodeOrThrow(fromId)
-    const toNode = this.getNodeOrThrow(toId)
-
     if (this.hasEdge(fromId, toId)) {
       return
     }
 
     if (!SimulatorGraph.hasPath(this.nodeMap, toId, fromId)) {
+      const fromNode = this.getNodeOrThrow(fromId)
+      const toNode = this.getNodeOrThrow(toId)
       const edge = this.createEdge(fromId, toId)
       fromNode.attachOutputEdge(edge)
       toNode.attachInputEdge(edge)
       return
     }
+    throw new Error('Adding this edge would create a cycle.')
   }
 
-  public disconnect(fromId: string, toId: string): void {
+  public removeEdge(fromId: string, toId: string): void {
     const fromNode = this.getNodeOrThrow(fromId)
     const toNode = this.getNodeOrThrow(toId)
 
@@ -211,10 +211,7 @@ export class SimulatorGraph {
 
       ordered.push(nodeId)
 
-      const node = this.nodeMap.get(nodeId)
-      if (!node) {
-        continue
-      }
+      const node = this.getNodeOrThrow(nodeId)
 
       for (const outputId of node.outputEdges.map((edge) => edge.toId)) {
         const current = indegrees.get(outputId)
@@ -237,41 +234,6 @@ export class SimulatorGraph {
 
     return ordered
   }
-
-  // private static assertAdjacencyConsistencyForNode(nodeMap: Map<NodeId, SimulatorNode>, nodeId: string): void {
-  //   const node = nodeMap.get(nodeId)
-  //   if (!node) {
-  //     throw new Error(`Unknown node: ${nodeId}`)
-  //   }
-
-  //   for (const inputId of node.inputIds) {
-  //     const inputNode = nodeMap.get(inputId)
-  //     if (!inputNode) {
-  //       throw new Error(`Node ${node.id} has unknown input node: ${inputId}`)
-  //     }
-
-  //     if (!inputNode.outputIds.has(node.id)) {
-  //       throw new Error(`Input/output mismatch for ${inputId} -> ${node.id}`)
-  //     }
-  //   }
-
-  //   for (const outputId of node.outputIds) {
-  //     const outputNode = nodeMap.get(outputId)
-  //     if (!outputNode) {
-  //       throw new Error(`Node ${node.id} has unknown output node: ${outputId}`)
-  //     }
-
-  //     if (!outputNode.inputIds.has(node.id)) {
-  //       throw new Error(`Output/input mismatch for ${node.id} -> ${outputId}`)
-  //     }
-  //   }
-  // }
-
-  // private static assertAdjacencyConsistency(nodeMap: Map<NodeId, SimulatorNode>): void {
-  //   for (const node of nodeMap.values()) {
-  //     SimulatorGraph.assertAdjacencyConsistencyForNode(nodeMap, node.id)
-  //   }
-  // }
 
   private assertAcyclicForNode(
     nodeId: string,
