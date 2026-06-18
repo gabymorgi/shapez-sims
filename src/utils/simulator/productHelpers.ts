@@ -1,6 +1,6 @@
 import type { ColorLetter } from '../Shape'
-import type { ColorProduct, Product, ShapeProduct } from '../Simulator.ts'
 import { cloneShape } from '../Shape.ts'
+import type { ColorProduct, Product, ShapeProduct } from '../simulatorGraph/SimulatorEdge.ts'
 
 export function createShapeProduct(shape: Parameters<typeof cloneShape>[0]): ShapeProduct {
   return {

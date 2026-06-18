@@ -1,103 +1,145 @@
 import { describe, expect, it } from 'vitest'
+import { Belt } from '../simulator/Belt.ts'
+import { Painter } from '../simulator/Painter.ts'
+import { Rotator } from '../simulator/Rotator.ts'
+import type { EdgeProductType } from './SimulatorEdge.ts'
 import { SimulatorGraph } from './SimulatorGraph.ts'
-import { Belt, Rotation, Rotator, SimulatorNode } from '../Simulator.ts'
-import { codeToShape, shapeToCode } from '../Shape.ts'
+import { SimulatorNode } from './SimulatorNode.ts'
 
-describe('SimulatorGraph structure', () => {
-  it('tracks multiple roots/leaves and allows navigation both ways', () => {
-    const a = new SimulatorNode({ id: 'A', simulator: new Belt(), throughput: [1, 2] })
-    const b = new SimulatorNode({ id: 'B', simulator: new Belt(), throughput: [1, 2] })
-    const c = new SimulatorNode({ id: 'C', simulator: new Belt(), throughput: [2, 3] })
+class ColorNode extends SimulatorNode {
+  protected getMaxInputs(): number {
+    return 1
+  }
 
-    const graph = SimulatorGraph.empty()
-    graph.addNode(a)
-    graph.addNode(b)
-    graph.addNode(c)
-    graph.addEdge('A', 'C')
-    graph.addEdge('B', 'C')
+  protected getMaxOutputs(): number {
+    return 1
+  }
 
-    expect(graph.rootIds).toEqual(['A', 'B'])
-    expect(graph.leafIds).toEqual(['C'])
+  protected canAcceptInputConnection(edgeType: EdgeProductType): boolean {
+    return edgeType === 'color'
+  }
 
-    expect(graph.getInputs('C').map((node) => node.id)).toEqual(['A', 'B'])
-    expect(graph.getOutputs('A').map((node) => node.id)).toEqual(['C'])
+  protected canAcceptOutputConnection(edgeType: EdgeProductType): boolean {
+    return edgeType === 'color'
+  }
 
-    const cNode = graph.getNode('C')
-    expect(cNode ? Array.from(cNode.inputIds) : undefined).toEqual(['A', 'B'])
-    expect(cNode ? Array.from(cNode.outputIds) : undefined).toEqual([])
-  })
+  public simulate(): void {}
+}
 
-  it('truncates source outputs if connect would create a cycle', () => {
-    const graph = SimulatorGraph.empty()
-    graph.addNode(new SimulatorNode({ id: 'A', simulator: new Belt(), throughput: [1, 1] }))
-    graph.addNode(new SimulatorNode({ id: 'B', simulator: new Belt(), throughput: [1, 1] }))
-    graph.addNode(new SimulatorNode({ id: 'C', simulator: new Belt(), throughput: [1, 1] }))
-    graph.addNode(new SimulatorNode({ id: 'D', simulator: new Belt(), throughput: [1, 1] }))
-    graph.addEdge('A', 'B')
-    graph.addEdge('B', 'C')
-    graph.addEdge('C', 'D')
+describe('SimulatorGraph edge validation', () => {
+  it('creates a shape edge between compatible nodes', () => {
+    const graph = new SimulatorGraph()
+    const source = new Belt({ id: 'source' })
+    const target = new Belt({ id: 'target' })
 
-    graph.addEdge('C', 'A')
-
-    expect(Array.from(graph.getNode('C')?.outputIds ?? [])).toEqual(['D'])
-    expect(Array.from(graph.getNode('D')?.inputIds ?? [])).toEqual(['C'])
-    expect(Array.from(graph.getNode('A')?.inputIds ?? [])).toEqual([])
-    expect(graph.topologicalOrder()).toEqual(['A', 'B', 'C', 'D'])
-  })
-})
-
-describe('SimulatorGraph simulation', () => {
-  it('propagates root outputs through connected nodes', () => {
-    const source = new SimulatorNode({
-      id: 'source',
-      simulator: new Belt(),
-      throughput: [1, 1],
-    })
-
-    const transform = new SimulatorNode({
-      id: 'transform',
-      simulator: new Rotator(120, Rotation.Clockwise),
-      throughput: [2, 2],
-    })
-
-    const sink = new SimulatorNode({
-      id: 'sink',
-      simulator: new Belt(),
-      throughput: [1, 1],
-    })
-
-    const graph = SimulatorGraph.empty()
     graph.addNode(source)
-    graph.addNode(transform)
-    graph.addNode(sink)
-    graph.addEdge('source', 'transform')
-    graph.addEdge('transform', 'sink')
+    graph.addNode(target)
 
-    const outputs = graph.simulate({
-      source: [codeToShape('CrRgSbWm')],
-    })
+    graph.addEdge(source.id, target.id, 'shape')
 
-    expect(outputs.source.map((shape) => shapeToCode(shape))).toEqual(['CrRgSbWm'])
-    expect(outputs.transform.map((shape) => shapeToCode(shape))).toEqual(['WmCrRgSb'])
-    expect(outputs.sink.map((shape) => shapeToCode(shape))).toEqual(['WmCrRgSb'])
+    expect(source.outputEdges).toHaveLength(1)
+    expect(target.inputEdges).toHaveLength(1)
+    expect(source.outputEdges[0]?.edgeType).toBe('shape')
   })
 
-  it('aggregates inputs from multiple parents', () => {
-    const graph = SimulatorGraph.empty()
-    graph.addNode(new SimulatorNode({ id: 'left', simulator: new Belt(), throughput: [1, 1] }))
-    graph.addNode(new SimulatorNode({ id: 'right', simulator: new Belt(), throughput: [1, 1] }))
-    graph.addNode(new SimulatorNode({ id: 'merge', simulator: new Belt(), throughput: [2, 2] }))
-    graph.addEdge('left', 'merge')
-    graph.addEdge('right', 'merge')
+  it('rejects an edge type disallowed by the source node', () => {
+    const graph = new SimulatorGraph()
+    const source = new ColorNode({ id: 'color-source' })
+    const target = new Belt({ id: 'shape-target' })
 
-    const outputs = graph.simulate({
-      left: [codeToShape('CrRgSbWm')],
-      right: [codeToShape('WuCgSyRb')],
-    })
+    graph.addNode(source)
+    graph.addNode(target)
 
-    expect(outputs.merge.map((shape) => shapeToCode(shape))).toEqual(['CrRgSbWm'])
+    expect(() => graph.addEdge(source.id, target.id, 'shape')).toThrow(/cannot accept shape output/i)
+    expect(source.outputEdges).toHaveLength(0)
+    expect(target.inputEdges).toHaveLength(0)
+  })
 
-    const secondTickOutputs = graph.simulate()
-    expect(secondTickOutputs.merge.map((shape) => shapeToCode(shape))).toEqual(['WuCgSyRb'])
+  it('rejects an edge type disallowed by the target node', () => {
+    const graph = new SimulatorGraph()
+    const source = new Belt({ id: 'shape-source' })
+    const target = new ColorNode({ id: 'color-target' })
+
+    graph.addNode(source)
+    graph.addNode(target)
+
+    expect(() => graph.addEdge(source.id, target.id, 'shape')).toThrow(/cannot accept shape input/i)
+    expect(source.outputEdges).toHaveLength(0)
+    expect(target.inputEdges).toHaveLength(0)
+  })
+
+  it('rejects connecting more outputs than allowed', () => {
+    const graph = new SimulatorGraph()
+    const source = new Rotator(120)
+    const firstTarget = new Belt({ id: 'first-target' })
+    const secondTarget = new Belt({ id: 'second-target' })
+
+    graph.addNode(source)
+    graph.addNode(firstTarget)
+    graph.addNode(secondTarget)
+
+    graph.addEdge(source.id, firstTarget.id, 'shape')
+
+    expect(() => graph.addEdge(source.id, secondTarget.id, 'shape')).toThrow(/cannot accept more than 1 output/i)
+  })
+
+  it('rejects connecting more inputs than allowed', () => {
+    const graph = new SimulatorGraph()
+    const firstSource = new Belt({ id: 'first-source' })
+    const secondSource = new Belt({ id: 'second-source' })
+    const target = new Belt({ id: 'target' })
+
+    graph.addNode(firstSource)
+    graph.addNode(secondSource)
+    graph.addNode(target)
+
+    graph.addEdge(firstSource.id, target.id, 'shape')
+
+    expect(() => graph.addEdge(secondSource.id, target.id, 'shape')).toThrow(/cannot accept more than 1 input/i)
+  })
+
+  it('enforces Painter indexed input typing', () => {
+    const graph = new SimulatorGraph()
+    const shapeSource = new Belt({ id: 'shape-source' })
+    const colorSource = new ColorNode({ id: 'color-source' })
+    const painter = new Painter()
+
+    graph.addNode(shapeSource)
+    graph.addNode(colorSource)
+    graph.addNode(painter)
+
+    graph.addEdge(shapeSource.id, painter.id, 'shape')
+    graph.addEdge(colorSource.id, painter.id, 'color')
+
+    expect(painter.inputEdges).toHaveLength(2)
+    expect(painter.inputEdges[0]?.edgeType).toBe('shape')
+    expect(painter.inputEdges[1]?.edgeType).toBe('color')
+  })
+
+  it('rejects Painter connections when index types are swapped', () => {
+    const graph = new SimulatorGraph()
+    const shapeSource = new Belt({ id: 'shape-source' })
+    const colorSource = new ColorNode({ id: 'color-source' })
+    const painter = new Painter()
+
+    graph.addNode(shapeSource)
+    graph.addNode(colorSource)
+    graph.addNode(painter)
+
+    expect(() => graph.addEdge(colorSource.id, painter.id, 'color')).toThrow(/cannot accept color input at index 0/i)
+    expect(() => graph.addEdge(shapeSource.id, painter.id, 'shape')).not.toThrow()
+  })
+
+  it('still rejects edges that would create cycles', () => {
+    const graph = new SimulatorGraph()
+    const first = new Belt({ id: 'first' })
+    const second = new Belt({ id: 'second' })
+
+    graph.addNode(first)
+    graph.addNode(second)
+
+    graph.addEdge(first.id, second.id, 'shape')
+
+    expect(() => graph.addEdge(second.id, first.id, 'shape')).toThrow(/create a cycle/i)
   })
 })

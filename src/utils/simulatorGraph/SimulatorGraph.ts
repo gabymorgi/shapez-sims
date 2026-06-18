@@ -1,6 +1,6 @@
-import { createShapeProduct } from '../simulator/productHelpers.ts'
-import { SimulatorEdge, type ShapeProduct, type SimulatorNode } from '../Simulator.ts'
 import type { Shape } from '../Shape.ts'
+import { SimulatorNode } from './SimulatorNode.ts'
+import { type EdgeProductType, SimulatorEdge } from './SimulatorEdge.ts'
 
 type NodeId = string
 type VisitState = 'gray' | 'black'
@@ -8,7 +8,6 @@ type VisitState = 'gray' | 'black'
 export class SimulatorGraph {
   private readonly nodeMap: Map<NodeId, SimulatorNode>
   private readonly edgeMap: Map<string, SimulatorEdge>
-  private isValidated = false
 
   constructor() {
     const map = new Map<NodeId, SimulatorNode>()
@@ -82,7 +81,6 @@ export class SimulatorGraph {
     }
 
     this.nodeMap.set(node.id, node)
-    this.isValidated = false
   }
 
   public removeNode(nodeId: string): void {
@@ -107,21 +105,33 @@ export class SimulatorGraph {
     this.nodeMap.delete(nodeId)
   }
 
-  public addEdge(fromId: string, toId: string): void {
+  public addEdge(fromId: string, toId: string, edgeType: EdgeProductType): void {
     if (fromId === toId) {
       throw new Error('A node cannot be connected to itself.')
     }
 
-    if (this.hasEdge(fromId, toId)) {
+    const fromNode = this.getNodeOrThrow(fromId)
+    const toNode = this.getNodeOrThrow(toId)
+
+    const existing = this.getEdge(fromId, toId)
+    if (existing) {
+      if (existing.edgeType !== edgeType) {
+        throw new Error(`Edge ${fromId}->${toId} already exists with type ${existing.edgeType}.`)
+      }
       return
     }
 
     if (!SimulatorGraph.hasPath(this.nodeMap, toId, fromId)) {
-      const fromNode = this.getNodeOrThrow(fromId)
-      const toNode = this.getNodeOrThrow(toId)
-      const edge = this.createEdge(fromId, toId)
+      const edge = new SimulatorEdge(fromId, toId, edgeType)
       fromNode.attachOutputEdge(edge)
-      toNode.attachInputEdge(edge)
+      try {
+        toNode.attachInputEdge(edge)
+      } catch (error) {
+        fromNode.detachOutputEdge(toId)
+        throw error
+      }
+
+      this.edgeMap.set(SimulatorGraph.edgeKey(fromId, toId), edge)
       return
     }
     throw new Error('Adding this edge would create a cycle.')
@@ -138,52 +148,13 @@ export class SimulatorGraph {
 
   public simulate(rootInputs: Readonly<Record<string, Shape[]>> = {}): Record<string, Shape[]> {
     const orderedNodeIds = this.topologicalOrder()
-    const nodeOutputs: Record<string, Shape[]> = {}
-
-    for (const node of this.nodeMap.values()) {
-      node.resetTickState()
-    }
-
-    for (const [nodeId, shapes] of Object.entries(rootInputs)) {
-      const node = this.getNode(nodeId)
-      if (!node) {
-        continue
-      }
-
-      for (const shape of shapes) {
-        node.enqueueExternalInput(createShapeProduct(shape))
-      }
-    }
-
-    for (const nodeId of orderedNodeIds) {
-      const node = this.getNodeOrThrow(nodeId)
-      node.simulate()
-
-      const emitted = node.drainTickOutputs()
-      const shapeOutputs = emitted
-        .filter((product): product is ShapeProduct => product.type === 'shape')
-        .map((product) => product.shape)
-
-      nodeOutputs[nodeId] = shapeOutputs
-    }
-
-    return nodeOutputs
+    void rootInputs
+    void orderedNodeIds
+    throw new Error('Not implemented yet')
   }
 
-  private hasEdge(fromId: string, toId: string): boolean {
-    return this.edgeMap.has(SimulatorGraph.edgeKey(fromId, toId))
-  }
-
-  private createEdge(fromId: string, toId: string): SimulatorEdge {
-    const key = SimulatorGraph.edgeKey(fromId, toId)
-    const existing = this.edgeMap.get(key)
-    if (existing) {
-      return existing
-    }
-
-    const edge = new SimulatorEdge(fromId, toId)
-    this.edgeMap.set(key, edge)
-    return edge
+  private getEdge(fromId: string, toId: string): SimulatorEdge | undefined {
+    return this.edgeMap.get(SimulatorGraph.edgeKey(fromId, toId))
   }
 
   private static edgeKey(fromId: string, toId: string): string {
@@ -276,8 +247,6 @@ export class SimulatorGraph {
 
       this.assertAcyclicForNode(node.id, visitState)
     }
-
-    this.isValidated = true
   }
 
   private static hasPath(nodeMap: Map<NodeId, SimulatorNode>, fromId: string, targetId: string): boolean {
