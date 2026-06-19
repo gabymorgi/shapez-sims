@@ -1,0 +1,128 @@
+import type { ColorLetter, Layer, Quarter, Shape } from '../Shape.ts'
+import { cloneShape } from '../Shape.ts'
+import type { ColorProduct, Product, ShapeProduct } from '../simulatorGraph/SimulatorEdge.ts'
+
+export function createShapeProduct(shape: Parameters<typeof cloneShape>[0]): ShapeProduct {
+  return {
+    shape: cloneShape(shape),
+  }
+}
+
+export function createColorProduct(color: ColorLetter, amount: number): ColorProduct {
+  return {
+    color,
+    amount,
+  }
+}
+
+export function cloneProduct(product: Product): Product {
+  if ('shape' in product) {
+    return createShapeProduct(product.shape)
+  }
+
+  return {
+    ...product,
+  }
+}
+
+export function isEmptyQuarter(quarter: Quarter): boolean {
+  return quarter.shape === '-'
+}
+
+export function isPinQuarter(quarter: Quarter): boolean {
+  return quarter.shape === 'P'
+}
+
+export function emptyQuarter(): Quarter {
+  return {
+    shape: '-',
+    color: null,
+  }
+}
+
+export function getDroppableGroups(layer: Layer): number[][] {
+  const groups: number[][] = []
+  const visited = new Set<number>()
+
+  for (let index = 0; index < layer.quarters.length; index += 1) {
+    const quarter = layer.quarters[index]
+    if (visited.has(index) || isEmptyQuarter(quarter)) {
+      continue
+    }
+
+    const group = [index]
+    visited.add(index)
+
+    if (isPinQuarter(quarter)) {
+      groups.push(group)
+      continue
+    }
+
+    let previousIndex = (index + 3) % 4
+    while (!visited.has(previousIndex)) {
+      const previousQuarter = layer.quarters[previousIndex]
+      if (isEmptyQuarter(previousQuarter) || isPinQuarter(previousQuarter)) {
+        break
+      }
+      group.unshift(previousIndex)
+      visited.add(previousIndex)
+      previousIndex = (previousIndex + 3) % 4
+      if (previousIndex === index) {
+        break
+      }
+    }
+
+    let nextIndex = (index + 1) % 4
+    while (!visited.has(nextIndex)) {
+      const nextQuarter = layer.quarters[nextIndex]
+      if (isEmptyQuarter(nextQuarter) || isPinQuarter(nextQuarter)) {
+        break
+      }
+      group.push(nextIndex)
+      visited.add(nextIndex)
+      nextIndex = (nextIndex + 1) % 4
+      if (nextIndex === index) {
+        break
+      }
+    }
+
+    groups.push(group)
+  }
+
+  return groups
+}
+
+export function settleUnsupportedGroups(shape: Shape): void {
+  let moved = true
+
+  while (moved) {
+    moved = false
+
+    for (let layerIndex = 1; layerIndex < shape.layers.length; layerIndex += 1) {
+      const layer = shape.layers[layerIndex]
+      const belowLayer = shape.layers[layerIndex - 1]
+
+      for (const group of getDroppableGroups(layer)) {
+        const canDrop = group.every(index => isEmptyQuarter(belowLayer.quarters[index]))
+        if (!canDrop) {
+          continue
+        }
+
+        for (const index of group) {
+          belowLayer.quarters[index] = { ...layer.quarters[index] }
+          layer.quarters[index] = emptyQuarter()
+        }
+
+        moved = true
+      }
+    }
+  }
+
+  while (shape.layers.length > 1) {
+    const topLayer = shape.layers[shape.layers.length - 1]
+    if (topLayer.quarters.some(quarter => !isEmptyQuarter(quarter))) {
+      break
+    }
+    shape.layers.pop()
+  }
+}

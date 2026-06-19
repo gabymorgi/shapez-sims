@@ -1,8 +1,10 @@
-import type { EdgeProductType, Product } from '../simulatorGraph/SimulatorEdge.ts'
+import type { EdgeProductType, ShapeEdge, ShapeProduct } from '../simulatorGraph/SimulatorEdge.ts'
 import { SimulatorNode } from '../simulatorGraph/SimulatorNode.ts'
 
-export class Belt extends SimulatorNode {
-  private bufferedProduct: Product | null = null
+export class Belt extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
+  public inputEdges: ShapeEdge[] = []
+  public outputEdges: ShapeEdge[] = []
+  private bufferedProduct: ShapeProduct | null = null
   private nextInputCursor = 0
   private nextOutputCursor = 0
 

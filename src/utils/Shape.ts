@@ -2,12 +2,12 @@ type ShapeLetter = 'C' | 'R' | 'S' | 'W' | 'c'
 export type ColorLetter = 'r' | 'g' | 'b' | 'c' | 'm' | 'y' | 'w' | 'u'
 type QuarterToken = `${ShapeLetter}${ColorLetter}` | 'P-' | '--'
 
-interface Quarter {
+export interface Quarter {
   shape: ShapeLetter | 'P' | '-'
   color: ColorLetter | null
 }
 
-interface Layer {
+export interface Layer {
   quarters: Quarter[]
 }
 

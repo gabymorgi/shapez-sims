@@ -1,5 +1,5 @@
 import { useId } from 'react'
-import { codeToShape, type Shape } from '../utils/Shape'
+import { codeToShape } from '../utils/Shape'
 
 type Orientation = 'nw' | 'ne' | 'se' | 'sw'
 type QuarterKind = 'circle' | 'square' | 'spike' | 'wedge'
@@ -76,9 +76,10 @@ function QuarterGlyph({
   kind,
 }: QuarterProps & { kind: QuarterKind }) {
   const rotate = rotationByOrientation[orientation]
+  const fullSize = size + strokeWidth
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${kind} quarter ${orientation}`}>
+    <svg width={fullSize} height={fullSize} viewBox={`0 0 ${fullSize} ${fullSize}`} role="img" aria-label={`${kind} quarter ${orientation}`}>
       <g transform={`rotate(${rotate} ${size / 2} ${size / 2})`}>
         <path d={getPath(kind, size)} fill={fill} stroke={stroke} strokeWidth={strokeWidth} />
       </g>
@@ -125,6 +126,7 @@ export function QuarterCrystal({
   stroke = '#000000',
   strokeWidth = 2,
 }: QuarterProps) {
+  const fullSize = size + strokeWidth
   const rotate = rotationByOrientation[orientation]
   const id = useId().replace(/:/g, '-')
   const stripeId = `crystal-stripes-${id}`
@@ -133,7 +135,7 @@ export function QuarterCrystal({
   const glowColor = useDarkStripes ? blendWithBlack(fill, 0.35) : blendWithWhite(fill, 0.65)
 
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`crystal quarter ${orientation}`}>
+    <svg width={fullSize} height={fullSize} viewBox={`0 0 ${fullSize} ${fullSize}`} role="img" aria-label={`crystal quarter ${orientation}`}>
       <defs>
         <pattern id={stripeId} patternUnits="userSpaceOnUse" width={size * 0.34} height={size * 0.34} patternTransform="rotate(-35)">
           <rect width={size * 0.12} height={size * 0.34} fill={highlightColor} opacity={0.55} />
@@ -299,15 +301,13 @@ function renderShapeFromLetter(
 }
 
 export function EncodedShape({ code, quarterSize = 72, gap = 0 }: EncodedShapeProps) {
-  let shape: Shape
-
   try {
-    shape = codeToShape(code.trim())
+    codeToShape(code.trim())
   } catch {
     return <div className="shape-error">Invalid code: {code} (expected 1-4 layers of 8-char shapes, using [C|R|S|W|c][color], P-, or -- per quarter)</div>
   }
 
-  const layers = shape.toString().split(':')
+  const layers = code.split(':')
 
   if (layers.length === 1) {
     return renderPlainShape(layers[0], quarterSize, gap, layers[0])

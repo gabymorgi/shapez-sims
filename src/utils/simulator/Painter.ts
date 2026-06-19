@@ -1,17 +1,28 @@
 import { cloneShape } from '../Shape.ts'
-import type { EdgeProductType, ShapeProduct, SimulatorEdge } from '../simulatorGraph/SimulatorEdge.ts'
-import { SimulatorNode } from '../simulatorGraph/SimulatorNode.ts'
+import type { ColorEdge, EdgeProductType, ShapeEdge, ShapeProduct, SimulatorEdge } from '../simulatorGraph/SimulatorEdge.ts'
+import { SimulatorNode, type SimulatorNodeOptions } from '../simulatorGraph/SimulatorNode.ts'
 
 const REQUIRED_COLOR_AMOUNT = 300
+const MAX_DELAY = 4
 
-export class Painter extends SimulatorNode {
-  protected canAcceptInputConnection(edgeType: EdgeProductType): boolean {
-    if (edgeType === 'shape') {
-      return this.inputEdges[0] === undefined
+const nonShapeLetters: string[] = ['-', 'P', 'c']
+
+export class Painter extends SimulatorNode<[ShapeEdge, ColorEdge], ShapeEdge[]> {
+  public inputEdges: [ShapeEdge, ColorEdge] = [undefined, undefined] as unknown as [ShapeEdge, ColorEdge]
+  public outputEdges: ShapeEdge[] = []
+  private delay = 0
+
+  constructor(options: SimulatorNodeOptions) {
+    super(options)
+  }
+
+  protected canAcceptInputConnection(edgeType: EdgeProductType, inputIndex: number): boolean {
+    if (inputIndex === 0) {
+      return edgeType === 'shape' && this.inputEdges[0] === undefined
     }
 
-    if (edgeType === 'color') {
-      return this.inputEdges[1] === undefined
+    if (inputIndex === 1) {
+      return edgeType === 'color' && this.inputEdges[1] === undefined
     }
 
     return false
@@ -22,53 +33,60 @@ export class Painter extends SimulatorNode {
   }
 
   public attachInputEdge(edge: SimulatorEdge): void {
-    if (this.inputEdges.includes(edge)) {
+    if (this.inputEdges[0] === edge || this.inputEdges[1] === edge) {
       return
     }
 
-    if (!this.canAcceptInputConnection(edge.edgeType)) {
-      throw new Error(`Node ${this.id} cannot accept ${edge.edgeType}.`)
+    const inputIndex = this.inputEdges[0] === undefined ? 0 : this.inputEdges[1] === undefined ? 1 : 2
+    if (!this.canAcceptInputConnection(edge.edgeType, inputIndex)) {
+      throw new Error(`Node ${this.id} cannot accept ${edge.edgeType} input at index ${inputIndex}.`)
     }
 
-    this.inputEdges[edge.edgeType === 'shape' ? 0 : 1] = edge
+    if (inputIndex === 0) {
+      this.inputEdges[0] = edge as ShapeEdge
+      return
+    }
+
+    this.inputEdges[1] = edge as ColorEdge
   }
 
   public detachInputEdge(fromId: string): void {
-    const index = this.inputEdges.findIndex((edge) => edge.fromId === fromId && edge.toId === this.id)
+    const index = this.inputEdges.findIndex((edge) => edge?.fromId === fromId && edge?.toId === this.id)
     if (index >= 0) {
       this.inputEdges[index] = undefined as never
     }
   }
 
   public simulate(): void {
+    this.delay = Math.max(0, this.delay - 1)
     const shapeEdge = this.inputEdges[0]
     const colorEdge = this.inputEdges[1]
-    if (!shapeEdge || !colorEdge) {
+    const outputEdge = this.outputEdges[0]
+    if (!shapeEdge || !colorEdge || !outputEdge || this.delay > 0) {
       return
     }
 
-    const colorCandidate = this.inputEdges[1]?.peekProduct()
-    if (!colorCandidate || colorCandidate.type !== 'color' || colorCandidate.amount < REQUIRED_COLOR_AMOUNT) {
+    const colorInput = colorEdge.peekProduct()
+    if (!colorInput || colorInput.amount < REQUIRED_COLOR_AMOUNT || !shapeEdge.hasProduct || outputEdge.hasProduct) {
       return
     }
 
-    const shapeInput = this.consumeInputFromEdge(shapeEdge)
-    const colorInput = this.consumeInputFromEdge(colorEdge)
-    if (!shapeInput || !colorInput || shapeInput.type !== 'shape' || colorInput.type !== 'color') {
-      return
-    }
+    this.delay = MAX_DELAY
+    const shapeInput = shapeEdge.takeProduct()!
+
+    colorEdge.takeProduct(REQUIRED_COLOR_AMOUNT)
 
     const paintedShape: ShapeProduct = {
       type: 'shape',
       shape: cloneShape(shapeInput.shape),
     }
 
-    for (const layer of paintedShape.shape.layers) {
-      for (const quarter of layer.quarters) {
-        if (quarter.shape !== '-' && quarter.shape !== 'P') {
-          quarter.color = colorInput.color
-        }
+    for (const quarter of paintedShape.shape.layers.at(-1)?.quarters ?? []) {
+      if (!nonShapeLetters.includes(quarter.shape)) {
+        quarter.color = colorInput.color
       }
     }
+
+    outputEdge.putProduct(paintedShape)
   }
 }

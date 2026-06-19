@@ -1,26 +1,28 @@
-import type { ColorLetter, Shape } from '../Shape.ts'
-import { cloneProduct } from '../simulator/productHelpers.ts'
+import { cloneShape, type ColorLetter, type Shape } from '../Shape.ts'
 
 export interface ShapeProduct {
-  type: 'shape'
   shape: Shape
 }
 
 export interface ColorProduct {
-  type: 'color'
   color: ColorLetter
   amount: number
 }
 
-export type Product = ShapeProduct | ColorProduct
-export type EdgeProductType = Product['type']
+export interface ProductByType {
+  shape: ShapeProduct
+  color: ColorProduct
+}
 
-export abstract class SimulatorEdge {
-  public readonly fromId: string // nodo
-  public readonly toId: string // nodo
-  public readonly edgeType: EdgeProductType
+export type Product = ShapeProduct | ColorProduct
+export type EdgeProductType = 'shape' | 'color'
+
+export abstract class SimulatorEdge<T extends Product = Product> {
+  public readonly fromId: string
+  public readonly toId: string
   public readonly throughput: number
-  private product: Product | null = null
+  public readonly edgeType: EdgeProductType
+  protected product: T | null = null
 
   constructor(fromId: string, toId: string, edgeType: EdgeProductType, throughput = 120) {
     this.fromId = fromId
@@ -33,41 +35,82 @@ export abstract class SimulatorEdge {
     return this.product !== null
   }
 
-  public peekProduct(): Product | null {
+  public peekProduct(): T | null {
     return this.product
   }
 
-  public takeProduct(): Product | null {
+  public abstract takeProduct(amount?: number): T | null
+
+  public abstract putProduct(product: T): boolean
+}
+
+export class ShapeEdge extends SimulatorEdge<ShapeProduct> {
+  constructor(fromId: string, toId: string, throughput = 120) {
+    super(fromId, toId, 'shape', throughput)
+  }
+
+  public takeProduct(): ShapeProduct | null {
     const taken = this.product
     this.product = null
     return taken
   }
 
-  public takeProductAmount(amount: number): boolean {
-    if (!this.product) {
+  public putProduct(product: ShapeProduct): boolean {
+    if (this.hasProduct) {
       return false
     }
-
-    if (this.product.type === 'color') {
-      if (this.product.amount < amount) {
-        return false
-      }
-      this.product.amount -= amount
-      return true
+    this.product = {
+      shape: cloneShape(product.shape),
     }
-    return false
+    return true
+  }
+}
+
+export class ColorEdge extends SimulatorEdge<ColorProduct> {
+  constructor(fromId: string, toId: string, throughput = 120) {
+    super(fromId, toId, 'color', throughput)
   }
 
-  public putProduct(product: Product): boolean {
-    if (this.product) {
-      return false
+  public takeProduct(amount?: number): ColorProduct | null {
+    if (!this.product) {
+      return null
     }
 
-    if (product.type !== this.edgeType) {
-      return false
+    const requestedAmount = amount ?? this.product.amount
+    if (this.product.amount < requestedAmount) {
+      return null
     }
 
-    this.product = cloneProduct(product)
-    return true
+    this.product.amount -= requestedAmount
+    const consumed: ColorProduct = {
+      color: this.product.color,
+      amount: requestedAmount,
+    }
+
+    if (this.product.amount === 0) {
+      this.product = null
+    }
+
+    return consumed
+  }
+
+  public putProduct(product: ColorProduct): boolean {
+    if (!this.product) {
+      this.product = {
+        ...product,
+      }
+      return true
+    }
+
+    if (this.product.color === product.color) {
+      const resultAmount = this.product.amount + product.amount
+      if (resultAmount > 500) {
+        return false
+      }
+      this.product.amount = resultAmount
+      return true
+    }
+
+    return false
   }
 }

@@ -1,52 +1,76 @@
-import type { Product, ShapeProduct } from '../Simulator.ts'
-import { cloneShape } from '../Shape.ts'
-import type { NodeSimulator, SimulatorNode } from './SimulatorNode.ts'
+import { cloneShape, type Shape } from '../Shape.ts'
+import type { EdgeProductType, ShapeEdge, ShapeProduct } from '../simulatorGraph/SimulatorEdge.ts'
+import { SimulatorNode, type SimulatorNodeOptions } from '../simulatorGraph/SimulatorNode.ts'
+import { settleUnsupportedGroups } from './utils.ts'
 
-function mergeShapes(bottom: ShapeProduct, top: ShapeProduct): ShapeProduct {
-  const merged = cloneShape(bottom.shape)
-  merged.layers.push(...cloneShape(top.shape).layers)
-
-  return {
-    type: 'shape',
-    shape: merged,
+function breakTopCrystals(shape: Shape, topStartLayer: number): void {
+  for (let layerIndex = topStartLayer; layerIndex < shape.layers.length; layerIndex += 1) {
+    for (const quarter of shape.layers[layerIndex].quarters) {
+      if (quarter.shape === 'c') {
+        quarter.shape = '-'
+        quarter.color = null
+      }
+    }
   }
 }
 
-export class Stacker implements NodeSimulator {
-  private pendingOutput: ShapeProduct | null = null
+export function stackShapes(bottom: ShapeProduct, top: ShapeProduct): ShapeProduct {
+  const merged = cloneShape(bottom.shape)
+  const topStartLayer = merged.layers.length
+  merged.layers.push(...cloneShape(top.shape).layers)
+  breakTopCrystals(merged, topStartLayer)
+  settleUnsupportedGroups(merged)
 
-  public simulate(node: SimulatorNode): void {
-    if (this.pendingOutput) {
-      if (node.pushToNextOutput(this.pendingOutput)) {
-        this.pendingOutput = null
-      }
+  return { shape: merged }
+}
+
+const MAX_DELAY = 6
+
+export class Stacker extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
+  public inputEdges: ShapeEdge[] = []
+  public outputEdges: ShapeEdge[] = []
+  private delay = 0
+
+  constructor(options: SimulatorNodeOptions) {
+    super(options)
+  }
+
+  protected canAcceptInputConnection(edgeType: EdgeProductType, index: number): boolean {
+    return edgeType === 'shape' && this.inputEdges[index] === undefined
+  }
+
+  protected canAcceptOutputConnection(edgeType: EdgeProductType): boolean {
+    return edgeType === 'shape' && this.outputEdges.length < 1
+  }
+
+  public attachInputEdge(edge: ShapeEdge, index: number): void {
+    if (this.inputEdges.includes(edge)) {
       return
     }
 
-    if (node.orderedInputEdges().length < 2) {
+    const inputIndex = index || this.inputEdges.length
+    if (!this.canAcceptInputConnection(edge.edgeType, inputIndex)) {
+      throw new Error(`Node ${this.id} cannot accept ${edge.edgeType} input at index ${inputIndex}.`)
+    }
+
+    this.inputEdges[inputIndex] = edge
+  }
+
+  public simulate(): void {
+    this.delay = Math.max(0, this.delay - 1)
+    const inputBottom = this.inputEdges[0]
+    const inputTop = this.inputEdges[1]
+    const outputEdge = this.outputEdges[0]
+
+    if (!inputBottom || !inputTop || !outputEdge || this.delay > 0 || outputEdge.hasProduct || !inputBottom.hasProduct || !inputTop.hasProduct) {
       return
     }
+    this.delay = MAX_DELAY
 
-    const firstEdge = node.orderedInputEdges()[0]
-    const secondEdge = node.orderedInputEdges()[1]
+    const bottomShape = inputBottom.takeProduct()!
+    const topShape = inputTop.takeProduct()!
 
-    const firstProduct = firstEdge ? node.peekInputProduct(firstEdge) : null
-    const secondProduct = secondEdge ? node.peekInputProduct(secondEdge) : null
-
-    if (!firstProduct || !secondProduct || firstProduct.type !== 'shape' || secondProduct.type !== 'shape') {
-      return
-    }
-
-    const consumedFirst = node.consumeInputFromEdge(firstEdge)
-    const consumedSecond = node.consumeInputFromEdge(secondEdge)
-
-    if (!consumedFirst || !consumedSecond) {
-      return
-    }
-
-    const stacked = mergeShapes(consumedFirst as ShapeProduct, consumedSecond as ShapeProduct)
-    if (!node.pushToNextOutput(stacked)) {
-      this.pendingOutput = stacked
-    }
+    const stacked = stackShapes(bottomShape, topShape)
+    outputEdge.putProduct(stacked)
   }
 }

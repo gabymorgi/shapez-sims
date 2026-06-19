@@ -1,16 +1,19 @@
 import type { Shape } from '../Shape.ts'
 import { SimulatorNode } from './SimulatorNode.ts'
-import { type EdgeProductType, SimulatorEdge } from './SimulatorEdge.ts'
+import { ColorEdge, type EdgeProductType, type Product, ShapeEdge, type SimulatorEdge } from './SimulatorEdge.ts'
 
 type NodeId = string
 type VisitState = 'gray' | 'black'
 
+type Node = SimulatorNode<SimulatorEdge<Product>[], SimulatorEdge<Product>[]>
+type Edge = SimulatorEdge<Product>
+
 export class SimulatorGraph {
-  private readonly nodeMap: Map<NodeId, SimulatorNode>
-  private readonly edgeMap: Map<string, SimulatorEdge>
+  private readonly nodeMap: Map<NodeId, Node>
+  private readonly edgeMap: Map<string, Edge>
 
   constructor() {
-    const map = new Map<NodeId, SimulatorNode>()
+    const map = new Map<NodeId, Node>()
 
     // for (const node of nodes) {
     //   if (map.has(node.id)) {
@@ -23,7 +26,7 @@ export class SimulatorGraph {
     // SimulatorGraph.assertAcyclic(map)
 
     this.nodeMap = map
-    this.edgeMap = new Map<string, SimulatorEdge>()
+    this.edgeMap = new Map<string, Edge>()
 
     // for (const node of map.values()) {
     //   for (const outputId of node.outputIds) {
@@ -38,11 +41,11 @@ export class SimulatorGraph {
     return this.nodeMap.size
   }
 
-  public get nodes(): SimulatorNode[] {
+  public get nodes(): Node[] {
     return Array.from(this.nodeMap.values())
   }
 
-  public get roots(): SimulatorNode[] {
+  public get roots(): Node[] {
     return this.nodes.filter((node) => node.inputEdges.length === 0)
   }
 
@@ -50,7 +53,7 @@ export class SimulatorGraph {
     return this.roots.map((node) => node.id)
   }
 
-  public get leaves(): SimulatorNode[] {
+  public get leaves(): Node[] {
     return this.nodes.filter((node) => node.outputEdges.length === 0)
   }
 
@@ -62,11 +65,11 @@ export class SimulatorGraph {
     return this.nodeMap.has(nodeId)
   }
 
-  public getNode(nodeId: string): SimulatorNode | undefined {
+  public getNode(nodeId: string): Node | undefined {
     return this.nodeMap.get(nodeId)
   }
 
-  private getNodeOrThrow(nodeId: string): SimulatorNode {
+  private getNodeOrThrow(nodeId: string): Node {
     const node = this.nodeMap.get(nodeId)
     if (!node) {
       throw new Error(`Unknown node: ${nodeId}`)
@@ -75,7 +78,7 @@ export class SimulatorGraph {
     return node
   }
 
-  public addNode(node: SimulatorNode): void {
+  public addNode(node: Node): void {
     if (this.nodeMap.has(node.id)) {
       throw new Error(`Node already exists: ${node.id}`)
     }
@@ -122,7 +125,7 @@ export class SimulatorGraph {
     }
 
     if (!SimulatorGraph.hasPath(this.nodeMap, toId, fromId)) {
-      const edge = new SimulatorEdge(fromId, toId, edgeType)
+      const edge = this.createEdge(fromId, toId, edgeType)
       fromNode.attachOutputEdge(edge)
       try {
         toNode.attachInputEdge(edge)
@@ -132,6 +135,7 @@ export class SimulatorGraph {
       }
 
       this.edgeMap.set(SimulatorGraph.edgeKey(fromId, toId), edge)
+      this.assertAcyclic()
       return
     }
     throw new Error('Adding this edge would create a cycle.')
@@ -153,7 +157,15 @@ export class SimulatorGraph {
     throw new Error('Not implemented yet')
   }
 
-  private getEdge(fromId: string, toId: string): SimulatorEdge | undefined {
+  private createEdge(fromId: string, toId: string, edgeType: EdgeProductType): Edge {
+    if (edgeType === 'shape') {
+      return new ShapeEdge(fromId, toId)
+    }
+
+    return new ColorEdge(fromId, toId)
+  }
+
+  private getEdge(fromId: string, toId: string): Edge | undefined {
     return this.edgeMap.get(SimulatorGraph.edgeKey(fromId, toId))
   }
 
@@ -249,7 +261,7 @@ export class SimulatorGraph {
     }
   }
 
-  private static hasPath(nodeMap: Map<NodeId, SimulatorNode>, fromId: string, targetId: string): boolean {
+  private static hasPath(nodeMap: Map<NodeId, Node>, fromId: string, targetId: string): boolean {
     if (fromId === targetId) {
       return true
     }

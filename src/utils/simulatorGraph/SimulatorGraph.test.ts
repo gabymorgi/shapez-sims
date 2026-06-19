@@ -1,26 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import { Belt } from '../simulator/Belt.ts'
 import { Painter } from '../simulator/Painter.ts'
-import { Rotator } from '../simulator/Rotator.ts'
-import type { EdgeProductType } from './SimulatorEdge.ts'
+import { Rotation, Rotator } from '../simulator/Rotator.ts'
+import type { ColorEdge, EdgeProductType } from './SimulatorEdge.ts'
 import { SimulatorGraph } from './SimulatorGraph.ts'
-import { SimulatorNode } from './SimulatorNode.ts'
+import { SimulatorNode, type SimulatorNodeOptions } from './SimulatorNode.ts'
 
-class ColorNode extends SimulatorNode {
-  protected getMaxInputs(): number {
-    return 1
-  }
+class ColorNode extends SimulatorNode<ColorEdge[], ColorEdge[]> {
+  public inputEdges: ColorEdge[] = []
+  public outputEdges: ColorEdge[] = []
 
-  protected getMaxOutputs(): number {
-    return 1
+  constructor(options: SimulatorNodeOptions) {
+    super(options)
   }
 
   protected canAcceptInputConnection(edgeType: EdgeProductType): boolean {
-    return edgeType === 'color'
+    return edgeType === 'color' && this.inputEdges.length < 1
   }
 
   protected canAcceptOutputConnection(edgeType: EdgeProductType): boolean {
-    return edgeType === 'color'
+    return edgeType === 'color' && this.outputEdges.length < 1
   }
 
   public simulate(): void {}
@@ -70,7 +69,7 @@ describe('SimulatorGraph edge validation', () => {
 
   it('rejects connecting more outputs than allowed', () => {
     const graph = new SimulatorGraph()
-    const source = new Rotator(120)
+    const source = new Rotator({id: 'r'}, Rotation.Clockwise)
     const firstTarget = new Belt({ id: 'first-target' })
     const secondTarget = new Belt({ id: 'second-target' })
 
@@ -80,14 +79,14 @@ describe('SimulatorGraph edge validation', () => {
 
     graph.addEdge(source.id, firstTarget.id, 'shape')
 
-    expect(() => graph.addEdge(source.id, secondTarget.id, 'shape')).toThrow(/cannot accept more than 1 output/i)
+    expect(() => graph.addEdge(source.id, secondTarget.id, 'shape')).toThrow(/cannot accept shape output at index 1/i)
   })
 
   it('rejects connecting more inputs than allowed', () => {
     const graph = new SimulatorGraph()
     const firstSource = new Belt({ id: 'first-source' })
     const secondSource = new Belt({ id: 'second-source' })
-    const target = new Belt({ id: 'target' })
+    const target = new Rotator({ id: 'target' }, Rotation.Clockwise)
 
     graph.addNode(firstSource)
     graph.addNode(secondSource)
@@ -95,14 +94,14 @@ describe('SimulatorGraph edge validation', () => {
 
     graph.addEdge(firstSource.id, target.id, 'shape')
 
-    expect(() => graph.addEdge(secondSource.id, target.id, 'shape')).toThrow(/cannot accept more than 1 input/i)
+    expect(() => graph.addEdge(secondSource.id, target.id, 'shape')).toThrow(/cannot accept shape input at index 1/i)
   })
 
   it('enforces Painter indexed input typing', () => {
     const graph = new SimulatorGraph()
     const shapeSource = new Belt({ id: 'shape-source' })
     const colorSource = new ColorNode({ id: 'color-source' })
-    const painter = new Painter()
+    const painter = new Painter({ id: 'painter' })
 
     graph.addNode(shapeSource)
     graph.addNode(colorSource)
@@ -120,7 +119,7 @@ describe('SimulatorGraph edge validation', () => {
     const graph = new SimulatorGraph()
     const shapeSource = new Belt({ id: 'shape-source' })
     const colorSource = new ColorNode({ id: 'color-source' })
-    const painter = new Painter()
+    const painter = new Painter({ id: 'painter' })
 
     graph.addNode(shapeSource)
     graph.addNode(colorSource)
