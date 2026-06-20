@@ -4,6 +4,8 @@ import type { SubmitEvent } from 'react'
 import {
   EncodedShape,
 } from './components/QuarterShapes'
+import { codeToShape, shapeToCode } from './utils/Shape'
+import { rotateShapeProduct, Rotation } from './utils/simulator/Rotator'
 
 function App() {
   const examples = [
@@ -33,6 +35,8 @@ function App() {
   function handleDeleteShape(shapeIndex: number) {
     setSubmittedShapes((currentShapes) => currentShapes.filter((_, index) => index !== shapeIndex))
   }
+
+  console.log(shapeToCode(rotateShapeProduct({ shape: codeToShape("crcbWrRc") }, Rotation.HalfTurn).shape))
 
   return (
     <main className="shape-showcase">

@@ -77,7 +77,6 @@ export class Painter extends SimulatorNode<[ShapeEdge, ColorEdge], ShapeEdge[]> 
     colorEdge.takeProduct(REQUIRED_COLOR_AMOUNT)
 
     const paintedShape: ShapeProduct = {
-      type: 'shape',
       shape: cloneShape(shapeInput.shape),
     }
 

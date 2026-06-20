@@ -2,59 +2,65 @@ import { describe, expect, it } from 'vitest'
 import { codeToShape, shapeToCode } from '../Shape.ts'
 import { createShapeProduct } from './utils.ts'
 import { cutShape } from './Cutter.ts'
+import { swapShapes } from './Swapper'
 import type { ShapeProduct } from '../simulatorGraph/SimulatorEdge.ts'
 
 type NonNullableResult = [ShapeProduct, ShapeProduct]
 
-describe('cutShape', () => {
-  it('cuts a simple shape', () => {
-    const result = cutShape(
+describe('swapShapes', () => {
+  it('swap some simple shapes', () => {
+    const result = swapShapes([
       createShapeProduct(codeToShape('CrSbWgRy')),
-    )
+      createShapeProduct(codeToShape('WgRyCrSb')),
+    ])
 
     const [left, right] = result as NonNullableResult
 
-    expect(shapeToCode(left.shape)).toBe('----WgRy')
-    expect(shapeToCode(right.shape)).toBe('CrSb----')
+    expect(shapeToCode(left.shape)).toBe('CrSbCrSb')
+    expect(shapeToCode(right.shape)).toBe('WgRyWgRy')
   })
 
-  it('cuts multiple layered shape', () => {
-    const result = cutShape(
+  it('swap multiple layered shapes', () => {
+    const result = swapShapes([
       createShapeProduct(codeToShape('CrSbWgRy:--WyCc--:RuCmWySw')),
-    )
+      createShapeProduct(codeToShape('P-RuSbP-:CuCuCuCu:WbWgWr--')),
+    ])
 
     const [left, right] = result as NonNullableResult
 
-    expect(shapeToCode(left.shape)).toBe('----WgRy:----Cc--:----WySw')
-    expect(shapeToCode(right.shape)).toBe('CrSb----:--Wy----:RuCm----')
+    expect(shapeToCode(left.shape)).toBe('CrSbSbP-:--WyCuCu:RuCmWr--')
+    expect(shapeToCode(right.shape)).toBe('P-RuWgRy:CuCuCc--:WbWgWySw')
   })
 
-  it('cuts shape with empty left layers', () => {
-    const result = cutShape(
+  it('swap shapes with empty left layers', () => {
+    const result = swapShapes([
       createShapeProduct(codeToShape('CrSbWgRy:--P-----:RuCm----')),
-    )
+      createShapeProduct(codeToShape('WgRyCrSb:------P-:----RuCm')),
+    ])
 
     const [left, right] = result as NonNullableResult
 
-    expect(shapeToCode(left.shape)).toBe('----WgRy')
-    expect(shapeToCode(right.shape)).toBe('CrSb----:--P-----:RuCm----')
+    expect(shapeToCode(left.shape)).toBe('CrSbCrSb:--P---P-:RuCmRuCm')
+    expect(shapeToCode(right.shape)).toBe('WgRyWgRy')
   })
 
-  it('cut shape with empty left output', () => {
-    const result = cutShape(
-      createShapeProduct(codeToShape('Rccrcb--')),
-    )
+  it('swap shapes with empty left shape', () => {
+    const result = swapShapes([
+      createShapeProduct(codeToShape('CrSb----')),
+      createShapeProduct(codeToShape('----CrSb')),
+    ])
 
-    const [left, right] = result
+    const [left, right] = result as [ShapeProduct, ShapeProduct]
 
-    expect(left).toBe(undefined)
-    expect(shapeToCode(right!.shape)).toBe('Rc------')
+    expect(shapeToCode(left.shape)).toBe('CrSbCrSb')
+    expect(right).toBe(undefined)
   })
 
-  it('cut shape with both empty outputs', () => {
-    const result = cutShape(
-      createShapeProduct(codeToShape('cgcrcbcy')),
-    )
+  it('swap shapes with both empty shape', () => {
+    const result = swapShapes([
+      createShapeProduct(codeToShape('cbcrcbcy')),
+      createShapeProduct(codeToShape('cmcccycy')),
+    ])
 
     const [left, right] = result
 
@@ -62,37 +68,40 @@ describe('cutShape', () => {
     expect(right).toBe(undefined)
   })
 
-  it('cuts shape with drop', () => {
-    const result = cutShape(
+  it('swap shapes with drop', () => {
+    const result = swapShapes([
       createShapeProduct(codeToShape('Cr--WgRy:--CmRwSb')),
-    )
+      createShapeProduct(codeToShape('WgRyCr--:RwSb--Cm')),
+    ])
 
     const [left, right] = result as NonNullableResult
 
-    expect(shapeToCode(left.shape)).toBe('----WgRy:----RwSb')
-    expect(shapeToCode(right.shape)).toBe('CrCm----')
+    expect(shapeToCode(left.shape)).toBe('CrCmCrCm')
+    expect(shapeToCode(right.shape)).toBe('WgRyWgRy:RwSbRwSb')
   })
 
   it('keeps crystal intact if dont cut through', () => {
-    const result = cutShape(
+    const result = swapShapes([
       createShapeProduct(codeToShape('crcbWrRc')),
-    )
+      createShapeProduct(codeToShape('WrRccrcb')),
+    ])
 
     const [left, right] = result as NonNullableResult
 
-    expect(shapeToCode(left.shape)).toBe('----WrRc')
-    expect(shapeToCode(right.shape)).toBe('crcb----')
+    expect(shapeToCode(left.shape)).toBe('crcbcrcb')
+    expect(shapeToCode(right.shape)).toBe('WrRcWrRc')
   })
 
   it('breaks crystals if cut through', () => {
-    const result = cutShape(
+    const result = swapShapes([
       createShapeProduct(codeToShape('RccrcbWr')),
-    )
+      createShapeProduct(codeToShape('cbWrRccr')),
+    ])
 
     const [left, right] = result as NonNullableResult
 
-    expect(shapeToCode(left.shape)).toBe('------Wr')
-    expect(shapeToCode(right.shape)).toBe('Rc------')
+    expect(shapeToCode(left.shape)).toBe('Rc--Rc--')
+    expect(shapeToCode(right.shape)).toBe('--Wr--Wr')
   })
 
   it('breaks crystals if cut through and those touching affected crystals', () => {

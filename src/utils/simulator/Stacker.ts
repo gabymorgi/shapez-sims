@@ -24,15 +24,22 @@ export function stackShapes(bottom: ShapeProduct, top: ShapeProduct): ShapeProdu
   return { shape: merged }
 }
 
-const MAX_DELAY = 6
+export const StackerType = {
+  Straight: 'Straight',
+  Bent: 'Bent',
+} as const
+
+export type StackerType = (typeof StackerType)[keyof typeof StackerType]
 
 export class Stacker extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
   public inputEdges: ShapeEdge[] = []
   public outputEdges: ShapeEdge[] = []
   private delay = 0
+  private maxDelay: number;
 
-  constructor(options: SimulatorNodeOptions) {
+  constructor(options: SimulatorNodeOptions, type: StackerType = StackerType.Straight) {
     super(options)
+    this.maxDelay = type === StackerType.Bent ? 4 : 6
   }
 
   protected canAcceptInputConnection(edgeType: EdgeProductType, index: number): boolean {
@@ -65,7 +72,7 @@ export class Stacker extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
     if (!inputBottom || !inputTop || !outputEdge || this.delay > 0 || outputEdge.hasProduct || !inputBottom.hasProduct || !inputTop.hasProduct) {
       return
     }
-    this.delay = MAX_DELAY
+    this.delay = this.maxDelay
 
     const bottomShape = inputBottom.takeProduct()!
     const topShape = inputTop.takeProduct()!
