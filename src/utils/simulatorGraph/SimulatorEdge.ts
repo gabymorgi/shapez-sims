@@ -67,8 +67,14 @@ export class ShapeEdge extends SimulatorEdge<ShapeProduct> {
 }
 
 export class ColorEdge extends SimulatorEdge<ColorProduct> {
+  public capacity = 500
+
   constructor(fromId: string, toId: string, throughput = 120) {
     super(fromId, toId, 'color', throughput)
+  }
+
+  public get hasProduct(): boolean {
+    return this.product !== null && this.product.amount > this.capacity
   }
 
   public takeProduct(amount?: number): ColorProduct | null {
@@ -95,22 +101,16 @@ export class ColorEdge extends SimulatorEdge<ColorProduct> {
   }
 
   public putProduct(product: ColorProduct): boolean {
-    if (!this.product) {
+    if (this.product?.color === product.color) {
+      const resultAmount = this.product.amount + product.amount
+      this.product.amount = resultAmount
+    } else {
       this.product = {
         ...product,
       }
-      return true
     }
 
-    if (this.product.color === product.color) {
-      const resultAmount = this.product.amount + product.amount
-      if (resultAmount > 500) {
-        return false
-      }
-      this.product.amount = resultAmount
-      return true
-    }
+    return true
 
-    return false
   }
 }

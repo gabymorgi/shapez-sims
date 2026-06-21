@@ -2,10 +2,10 @@ import { cloneShape } from '../Shape.ts'
 import type { ColorEdge, EdgeProductType, ShapeEdge, ShapeProduct, SimulatorEdge } from '../simulatorGraph/SimulatorEdge.ts'
 import { SimulatorNode, type SimulatorNodeOptions } from '../simulatorGraph/SimulatorNode.ts'
 
-const REQUIRED_COLOR_AMOUNT = 300
-const MAX_DELAY = 4
+const REQUIRED_COLOR_AMOUNT = 400
+const MAX_DELAY = 6
 
-const nonShapeLetters: string[] = ['-', 'P', 'c']
+const emptyLetters: string[] = ['-', 'P']
 
 export class Painter extends SimulatorNode<[ShapeEdge, ColorEdge], ShapeEdge[]> {
   public inputEdges: [ShapeEdge, ColorEdge] = [undefined, undefined] as unknown as [ShapeEdge, ColorEdge]
@@ -82,9 +82,12 @@ export class Painter extends SimulatorNode<[ShapeEdge, ColorEdge], ShapeEdge[]> 
       shape: cloneShape(shapeInput.shape),
     }
 
-    for (const quarter of paintedShape.shape.layers.at(-1)?.quarters ?? []) {
-      if (!nonShapeLetters.includes(quarter.shape)) {
-        quarter.color = colorProduct.color
+    for (const layer of paintedShape.shape.layers) {
+      for (const quarter of layer.quarters) {
+        if (emptyLetters.includes(quarter.shape)) {
+          quarter.shape = 'c'
+          quarter.color = colorProduct.color
+        }
       }
     }
 
