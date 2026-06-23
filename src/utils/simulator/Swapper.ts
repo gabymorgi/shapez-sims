@@ -1,46 +1,13 @@
-import { cloneShape } from '../Shape.ts'
-import type { EdgeProductType, ShapeEdge, ShapeProduct } from '../simulatorGraph/SimulatorEdge.ts'
+import { type Shape } from '../Shape.ts'
+import type { EdgeProductType, ShapeEdge } from '../simulatorGraph/SimulatorEdge.ts'
 import { SimulatorNode } from '../simulatorGraph/SimulatorNode.ts'
-import { breakCutCrystals, emptyQuarter, settleWithCrystalBreak } from './utils.ts'
+import { swapShapes } from './utils.ts'
 
 const MAX_DELAY = 4
 
-export function swapShapes(shape: [ShapeProduct, ShapeProduct]): [ShapeProduct?, ShapeProduct?] {
-  const shape1 = cloneShape(shape[0].shape)
-  const shape2 = cloneShape(shape[1].shape)
-  breakCutCrystals(shape1)
-  breakCutCrystals(shape2)
 
-  const maxLayers = Math.max(shape1.layers.length, shape2.layers.length)
-  while (shape1.layers.length < maxLayers) {
-    shape1.layers.push({ quarters: [emptyQuarter(), emptyQuarter(), emptyQuarter(), emptyQuarter()] })
-  }
-  while (shape2.layers.length < maxLayers) {
-    shape2.layers.push({ quarters: [emptyQuarter(), emptyQuarter(), emptyQuarter(), emptyQuarter()] })
-  }
 
-  for (let l = 0; l < maxLayers; l++) {
-    // bottom left
-    let aux = shape1.layers[l].quarters[2]
-    shape1.layers[l].quarters[2] = shape2.layers[l].quarters[2]
-    shape2.layers[l].quarters[2] = aux
-
-    // top left
-    aux = shape1.layers[l].quarters[3]
-    shape1.layers[l].quarters[3] = shape2.layers[l].quarters[3]
-    shape2.layers[l].quarters[3] = aux
-  }
-
-  settleWithCrystalBreak(shape1)
-  settleWithCrystalBreak(shape2)
-
-  return [
-    shape1.layers.length > 0 ? { shape: shape1 } : undefined,
-    shape2.layers.length > 0 ? { shape: shape2 } : undefined
-  ]
-}
-
-export class Cutter extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
+export class Swapper extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
   public inputEdges: ShapeEdge[] = []
   public outputEdges: ShapeEdge[] = []
   private delay = 0
@@ -94,8 +61,8 @@ export class Cutter extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
       return
     }
 
-    const indexedShapes: [number, ShapeProduct][] = []
-    swapShapes([inputShapeLeft, inputShapeRight]).forEach((shape, index) => {
+    const indexedShapes: [number, Shape][] = []
+    swapShapes([inputShapeLeft.shape, inputShapeRight.shape]).forEach((shape, index) => {
       if (shape) {
         indexedShapes.push([index, shape] as const)
       }
@@ -110,7 +77,7 @@ export class Cutter extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
     inputRight.takeProduct()
 
     indexedShapes.forEach(([index, shape]) => {
-      this.outputEdges[index]!.putProduct(shape)
+      this.outputEdges[index]!.putProduct({ shape })
     })
   }
 }

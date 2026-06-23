@@ -1,28 +1,9 @@
-import { cloneShape } from '../Shape.ts'
-import type { EdgeProductType, ShapeEdge, ShapeProduct } from '../simulatorGraph/SimulatorEdge.ts'
+import type { Shape } from '../Shape.ts'
+import type { EdgeProductType, ShapeEdge } from '../simulatorGraph/SimulatorEdge.ts'
 import { SimulatorNode } from '../simulatorGraph/SimulatorNode.ts'
-import { breakCutCrystals, destroySide, LEFT_SIDE_INDICES, RIGHT_SIDE_INDICES, settleWithCrystalBreak } from './utils.ts'
+import { cutShape } from './utils.ts'
 
 const MAX_DELAY = 4
-
-export function cutShape(shape: ShapeProduct): [ShapeProduct?, ShapeProduct?] {
-  const cutResolvedShape = cloneShape(shape.shape)
-  breakCutCrystals(cutResolvedShape)
-
-  const leftShape = cloneShape(cutResolvedShape)
-  const rightShape = cloneShape(cutResolvedShape)
-
-  destroySide(leftShape, RIGHT_SIDE_INDICES)
-  destroySide(rightShape, LEFT_SIDE_INDICES)
-
-  settleWithCrystalBreak(leftShape)
-  settleWithCrystalBreak(rightShape)
-
-  return [
-    leftShape.layers.length > 0 ? { shape: leftShape } : undefined,
-    rightShape.layers.length > 0 ? { shape: rightShape } : undefined,
-  ]
-}
 
 export class Cutter extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
   public inputEdges: ShapeEdge[] = []
@@ -63,8 +44,8 @@ export class Cutter extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
       return
     }
 
-    const indexedShapes: [number, ShapeProduct][] = []
-    cutShape(inputShape).forEach((shape, index) => {
+    const indexedShapes: [number, Shape][] = []
+    cutShape(inputShape.shape).forEach((shape, index) => {
       if (shape) {
         indexedShapes.push([index, shape] as const)
       }
@@ -78,7 +59,7 @@ export class Cutter extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
     inputEdge.takeProduct()
 
     indexedShapes.forEach(([index, shape]) => {
-      this.outputEdges[index]!.putProduct(shape)
+      this.outputEdges[index]!.putProduct({ shape })
     })
   }
 }

@@ -1,6 +1,14 @@
-import type { Shape } from '../Shape.ts'
 import { SimulatorNode } from './SimulatorNode.ts'
 import { ColorEdge, type EdgeProductType, type Product, ShapeEdge, type SimulatorEdge } from './SimulatorEdge.ts'
+import { Belt } from '../simulator/Belt.ts'
+import { Pipe } from '../simulator/Pipe.ts'
+import { Generator } from '../simulator/Generator.ts'
+import { Trash } from '../simulator/Trash.ts'
+import { Stacker } from '../simulator/Stacker.ts'
+import { Painter } from '../simulator/Painter.ts'
+import { Crystalizer } from '../simulator/Crystalizer.ts'
+import { ColorMixer } from '../simulator/ColorMixer.ts'
+import { Swapper } from '../simulator/Swapper.ts'
 
 type NodeId = string
 type VisitState = 'gray' | 'black'
@@ -135,7 +143,9 @@ export class SimulatorGraph {
       }
 
       this.edgeMap.set(SimulatorGraph.edgeKey(fromId, toId), edge)
-      this.assertAcyclic()
+      this.assertAcyclicForNode(fromId)
+      this.assertAcyclicForNode(toId)
+
       return
     }
     throw new Error('Adding this edge would create a cycle.')
@@ -150,11 +160,13 @@ export class SimulatorGraph {
     toNode.detachInputEdge(fromId)
   }
 
-  public simulate(rootInputs: Readonly<Record<string, Shape[]>> = {}): Record<string, Shape[]> {
+  public simulate(): void {
     const orderedNodeIds = this.topologicalOrder()
-    void rootInputs
-    void orderedNodeIds
-    throw new Error('Not implemented yet')
+    
+    for (const nodeId of orderedNodeIds) {
+      const node = this.getNodeOrThrow(nodeId)
+      node.simulate()
+    }
   }
 
   private createEdge(fromId: string, toId: string, edgeType: EdgeProductType): Edge {
@@ -294,5 +306,120 @@ export class SimulatorGraph {
     }
 
     return false
+  }
+
+  private optimizeBelts = (): void => {
+    for (const node of this.nodes) {
+      if (node instanceof Belt && node.inputEdges.length === 1 && node.outputEdges.length === 1) {
+        const inEdge = node.inputEdges[0];
+        const outEdge = node.outputEdges[0];
+        
+        this.removeEdge(inEdge.fromId, node.id);
+        this.removeEdge(node.id, outEdge.toId);
+        this.removeNode(node.id);
+        this.addEdge(inEdge.fromId, outEdge.toId, inEdge.edgeType);
+      }
+    }
+  };
+
+  private optimizePipes = (): void => {
+    const visited = new Set<string>();
+
+    for (const node of this.nodes) {
+      if (!(node instanceof Pipe) || visited.has(node.id)) continue;
+
+      const cluster = new Set<string>();
+      const stack = [node.id];
+      const inputNodes = new Set<string>();
+      const outputNodes = new Set<string>();
+
+      while (stack.length > 0) {
+        const currentId = stack.pop()!;
+        if (!visited.has(node.id)) {
+          visited.add(currentId);
+          cluster.add(currentId);
+
+          for (const inputEdge of this.getNodeOrThrow(currentId).inputEdges) {
+            if (this.getNodeOrThrow(inputEdge.fromId) instanceof Pipe) {
+              stack.push(inputEdge.fromId);
+            } else {
+              inputNodes.add(inputEdge.fromId);
+            }
+          }
+
+          for (const outputEdge of this.getNodeOrThrow(currentId).outputEdges) {
+            if (this.getNodeOrThrow(outputEdge.toId) instanceof Pipe) {
+              stack.push(outputEdge.toId);
+            } else {
+              outputNodes.add(outputEdge.toId);
+            }
+          }
+        }
+      }
+
+      if (cluster.size > 1) {
+        // Remove all edges and nodes in the cluster
+        for (const pipeId of cluster) {
+          const pipeNode = this.getNodeOrThrow(pipeId);
+          for (const inputEdge of pipeNode.inputEdges) {
+            this.removeEdge(inputEdge.fromId, pipeId);
+          }
+          for (const outputEdge of pipeNode.outputEdges) {
+            this.removeEdge(pipeId, outputEdge.toId);
+          }
+          this.removeNode(pipeId);
+        }
+
+        // Connect all inputs and outputs to a single new Pipe node
+        this.addNode(new Pipe({ id: node.id }));
+        for (const inputId of inputNodes) {
+          this.addEdge(inputId, node.id, 'color');
+        }
+        for (const outputId of outputNodes) {
+          this.addEdge(node.id, outputId, 'color');
+        }
+      }
+    }
+  };
+
+  private removeDeadEnds = (): void => {
+    const deadEndNodeIds = this.nodes.filter((node) => {
+      if (node.inputEdges.length === 0 && !(node instanceof Generator)) {
+        return true
+      }
+      if (node.inputEdges.length === 1 && (node instanceof Stacker
+        || node instanceof Painter
+        || node instanceof Crystalizer
+        || node instanceof ColorMixer
+        || node instanceof Swapper)
+      ) {
+        return true
+      }
+      if (node.outputEdges.length === 0 && !(node instanceof Trash)) {
+        return true
+      }
+    }).map((node) => node.id);
+
+    const visited = new Set<string>(deadEndNodeIds);
+
+    while (deadEndNodeIds.length > 0) {
+      const nodeId = deadEndNodeIds.pop()!;
+      const node = this.getNodeOrThrow(nodeId);
+      for (const inputEdge of node.inputEdges) {
+        this.removeEdge(inputEdge.fromId, nodeId);
+        if (!visited.has(inputEdge.fromId)) {
+          visited.add(inputEdge.fromId);
+          deadEndNodeIds.push(inputEdge.fromId);
+        }
+      }
+      for (const outputEdge of node.outputEdges) {
+        this.removeEdge(nodeId, outputEdge.toId);
+        if (!visited.has(outputEdge.toId)) {
+          visited.add(outputEdge.toId);
+          deadEndNodeIds.push(outputEdge.toId);
+        }
+      }
+      this.removeNode(nodeId);
+    }
   }
 }

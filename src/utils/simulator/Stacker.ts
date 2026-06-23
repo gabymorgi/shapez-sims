@@ -1,28 +1,8 @@
-import { cloneShape, type Shape } from '../Shape.ts'
-import type { EdgeProductType, ShapeEdge, ShapeProduct } from '../simulatorGraph/SimulatorEdge.ts'
+import type { EdgeProductType, ShapeEdge } from '../simulatorGraph/SimulatorEdge.ts'
 import { SimulatorNode, type SimulatorNodeOptions } from '../simulatorGraph/SimulatorNode.ts'
-import { settleUnsupportedGroups } from './utils.ts'
+import { stackShapes } from './utils.ts'
 
-function breakTopCrystals(shape: Shape, topStartLayer: number): void {
-  for (let layerIndex = topStartLayer; layerIndex < shape.layers.length; layerIndex += 1) {
-    for (const quarter of shape.layers[layerIndex].quarters) {
-      if (quarter.shape === 'c') {
-        quarter.shape = '-'
-        quarter.color = null
-      }
-    }
-  }
-}
 
-export function stackShapes(bottom: ShapeProduct, top: ShapeProduct): ShapeProduct {
-  const merged = cloneShape(bottom.shape)
-  const topStartLayer = merged.layers.length
-  merged.layers.push(...cloneShape(top.shape).layers)
-  breakTopCrystals(merged, topStartLayer)
-  settleUnsupportedGroups(merged)
-
-  return { shape: merged }
-}
 
 export const StackerType = {
   Straight: 'Straight',
@@ -77,7 +57,7 @@ export class Stacker extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
     const bottomShape = inputBottom.takeProduct()!
     const topShape = inputTop.takeProduct()!
 
-    const stacked = stackShapes(bottomShape, topShape)
-    outputEdge.putProduct(stacked)
+    const stacked = stackShapes(bottomShape.shape, topShape.shape)
+    outputEdge.putProduct({ shape: stacked })
   }
 }

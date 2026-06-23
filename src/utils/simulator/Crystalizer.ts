@@ -1,13 +1,11 @@
-import { cloneShape } from '../Shape.ts'
 import type { ColorEdge, EdgeProductType, ShapeEdge, ShapeProduct, SimulatorEdge } from '../simulatorGraph/SimulatorEdge.ts'
 import { SimulatorNode, type SimulatorNodeOptions } from '../simulatorGraph/SimulatorNode.ts'
+import { crystalizeShape } from './utils.ts'
 
 const REQUIRED_COLOR_AMOUNT = 400
 const MAX_DELAY = 6
 
-const emptyLetters: string[] = ['-', 'P']
-
-export class Painter extends SimulatorNode<[ShapeEdge, ColorEdge], ShapeEdge[]> {
+export class Crystalizer extends SimulatorNode<[ShapeEdge, ColorEdge], ShapeEdge[]> {
   public inputEdges: [ShapeEdge, ColorEdge] = [undefined, undefined] as unknown as [ShapeEdge, ColorEdge]
   public outputEdges: ShapeEdge[] = []
   private delay = 0
@@ -16,13 +14,13 @@ export class Painter extends SimulatorNode<[ShapeEdge, ColorEdge], ShapeEdge[]> 
     super(options)
   }
 
-  protected canAcceptInputConnection(edgeType: EdgeProductType, inputIndex: number): boolean {
-    if (inputIndex === 0) {
-      return edgeType === 'shape' && this.inputEdges[0] === undefined
+  protected canAcceptInputConnection(edgeType: EdgeProductType): boolean {
+    if (edgeType === 'shape') {
+      return this.inputEdges[0] === undefined
     }
 
-    if (inputIndex === 1) {
-      return edgeType === 'color' && this.inputEdges[1] === undefined
+    if (edgeType === 'color') {
+      return this.inputEdges[1] === undefined
     }
 
     return false
@@ -37,18 +35,21 @@ export class Painter extends SimulatorNode<[ShapeEdge, ColorEdge], ShapeEdge[]> 
       return
     }
 
-    const inputIndex = this.inputEdges[0] === undefined ? 0 : this.inputEdges[1] === undefined ? 1 : 2
-    if (!this.canAcceptInputConnection(edge.edgeType, inputIndex)) {
-      throw new Error(`Node ${this.id} cannot accept ${edge.edgeType} input at index ${inputIndex}.`)
-    }
-
-    if (inputIndex === 0) {
+    if (edge.edgeType === 'shape') {
+      if (this.inputEdges[0]) {
+        throw new Error(`Node ${this.id} cannot accept another ${edge.edgeType} input`)
+      }
       this.inputEdges[0] = edge as ShapeEdge
       return
     }
 
-    this.inputEdges[1] = edge as ColorEdge
-    this.inputEdges[1].capacity = REQUIRED_COLOR_AMOUNT
+    if (edge.edgeType === 'color') {
+      if (this.inputEdges[1]) {
+        throw new Error(`Node ${this.id} cannot accept another ${edge.edgeType} input`)
+      }
+      this.inputEdges[1] = edge as ColorEdge
+      this.inputEdges[1].capacity = REQUIRED_COLOR_AMOUNT
+    }
   }
 
   public detachInputEdge(fromId: string): void {
@@ -79,16 +80,7 @@ export class Painter extends SimulatorNode<[ShapeEdge, ColorEdge], ShapeEdge[]> 
     const colorProduct = colorEdge.takeProduct(REQUIRED_COLOR_AMOUNT)!
 
     const paintedShape: ShapeProduct = {
-      shape: cloneShape(shapeInput.shape),
-    }
-
-    for (const layer of paintedShape.shape.layers) {
-      for (const quarter of layer.quarters) {
-        if (emptyLetters.includes(quarter.shape)) {
-          quarter.shape = 'c'
-          quarter.color = colorProduct.color
-        }
-      }
+      shape: crystalizeShape(shapeInput.shape, colorProduct.color),
     }
 
     outputEdge.putProduct(paintedShape)

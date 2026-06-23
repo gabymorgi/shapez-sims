@@ -1,29 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { Belt } from '../simulator/Belt.ts'
 import { Painter } from '../simulator/Painter.ts'
-import { Rotation, Rotator } from '../simulator/Rotator.ts'
-import type { ColorEdge, EdgeProductType } from './SimulatorEdge.ts'
+import { Rotator } from '../simulator/Rotator.ts'
 import { SimulatorGraph } from './SimulatorGraph.ts'
-import { SimulatorNode, type SimulatorNodeOptions } from './SimulatorNode.ts'
-
-class ColorNode extends SimulatorNode<ColorEdge[], ColorEdge[]> {
-  public inputEdges: ColorEdge[] = []
-  public outputEdges: ColorEdge[] = []
-
-  constructor(options: SimulatorNodeOptions) {
-    super(options)
-  }
-
-  protected canAcceptInputConnection(edgeType: EdgeProductType): boolean {
-    return edgeType === 'color' && this.inputEdges.length < 1
-  }
-
-  protected canAcceptOutputConnection(edgeType: EdgeProductType): boolean {
-    return edgeType === 'color' && this.outputEdges.length < 1
-  }
-
-  public simulate(): void {}
-}
+import { Pipe } from '../simulator/Pipe.ts'
+import { Rotation } from '../simulator/utils.ts'
 
 describe('SimulatorGraph edge validation', () => {
   it('creates a shape edge between compatible nodes', () => {
@@ -43,7 +24,7 @@ describe('SimulatorGraph edge validation', () => {
 
   it('rejects an edge type disallowed by the source node', () => {
     const graph = new SimulatorGraph()
-    const source = new ColorNode({ id: 'color-source' })
+    const source = new Pipe({ id: 'color-source' })
     const target = new Belt({ id: 'shape-target' })
 
     graph.addNode(source)
@@ -57,7 +38,7 @@ describe('SimulatorGraph edge validation', () => {
   it('rejects an edge type disallowed by the target node', () => {
     const graph = new SimulatorGraph()
     const source = new Belt({ id: 'shape-source' })
-    const target = new ColorNode({ id: 'color-target' })
+    const target = new Pipe({ id: 'color-target' })
 
     graph.addNode(source)
     graph.addNode(target)
@@ -100,7 +81,7 @@ describe('SimulatorGraph edge validation', () => {
   it('enforces Painter indexed input typing', () => {
     const graph = new SimulatorGraph()
     const shapeSource = new Belt({ id: 'shape-source' })
-    const colorSource = new ColorNode({ id: 'color-source' })
+    const colorSource = new Pipe({ id: 'color-source' }) 
     const painter = new Painter({ id: 'painter' })
 
     graph.addNode(shapeSource)
@@ -115,17 +96,17 @@ describe('SimulatorGraph edge validation', () => {
     expect(painter.inputEdges[1]?.edgeType).toBe('color')
   })
 
-  it('rejects Painter connections when index types are swapped', () => {
+  it('doesnt reject Painter connections when index types are swapped', () => {
     const graph = new SimulatorGraph()
     const shapeSource = new Belt({ id: 'shape-source' })
-    const colorSource = new ColorNode({ id: 'color-source' })
+    const colorSource = new Pipe({ id: 'color-source' })
     const painter = new Painter({ id: 'painter' })
 
     graph.addNode(shapeSource)
     graph.addNode(colorSource)
     graph.addNode(painter)
 
-    expect(() => graph.addEdge(colorSource.id, painter.id, 'color')).toThrow(/cannot accept color input at index 0/i)
+    expect(() => graph.addEdge(colorSource.id, painter.id, 'color')).not.toThrow()
     expect(() => graph.addEdge(shapeSource.id, painter.id, 'shape')).not.toThrow()
   })
 

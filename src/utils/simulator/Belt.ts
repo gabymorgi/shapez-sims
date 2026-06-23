@@ -9,11 +9,11 @@ export class Belt extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
   private nextOutputCursor = 0
 
   protected canAcceptInputConnection(edgeType: EdgeProductType): boolean {
-    return this.inputEdges.length < 3 && edgeType === 'shape'
+    return edgeType === 'shape'
   }
 
   protected canAcceptOutputConnection(edgeType: EdgeProductType): boolean {
-    return this.outputEdges.length < 3 && edgeType === 'shape'
+    return edgeType === 'shape'
   }
 
   public detachInputEdge(fromId: string): void {

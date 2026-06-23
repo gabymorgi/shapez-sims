@@ -1,73 +1,14 @@
-import type { ColorLetter } from '../Shape.ts'
 import type { ColorEdge, EdgeProductType } from '../simulatorGraph/SimulatorEdge.ts'
 import { SimulatorNode } from '../simulatorGraph/SimulatorNode.ts'
+import { mixColors } from './utils.ts'
 
 const REQUIRED_COLOR_AMOUNT = 300
 const OUTPUT_CAPACITY = REQUIRED_COLOR_AMOUNT * 2
 const MAX_DELAY = 4
 
-const PRIMARY_COLORS = new Set(['r', 'g', 'b'])
-const SECONDARY_COLORS = new Set(['c', 'm', 'y'])
 
-const PRIMARY_PAIR_TO_SECONDARY: Record<string, 'c' | 'm' | 'y'> = {
-  bg: 'c',
-  br: 'm',
-  gr: 'y',
-}
 
-function isPrimary(color: string): boolean {
-  return PRIMARY_COLORS.has(color)
-}
-
-function isSecondary(color: string): boolean {
-  return SECONDARY_COLORS.has(color)
-}
-
-function secondaryContainsPrimary(secondary: string, primary: string): boolean {
-  if (secondary === 'c') {
-    return primary === 'g' || primary === 'b'
-  }
-  if (secondary === 'm') {
-    return primary === 'r' || primary === 'b'
-  }
-  if (secondary === 'y') {
-    return primary === 'r' || primary === 'g'
-  }
-  return false
-}
-
-function mixColors(left: string, right: string): ColorLetter {
-  if (left === 'w') {
-    return right as ColorLetter
-  }
-  if (right === 'w') {
-    return left as ColorLetter
-  }
-
-  if (isSecondary(left) && isSecondary(right)) {
-    return 'w'
-  }
-
-  if (isPrimary(left) && isSecondary(right)) {
-    return secondaryContainsPrimary(right, left) ? (left as ColorLetter) : 'w'
-  }
-  if (isSecondary(left) && isPrimary(right)) {
-    return secondaryContainsPrimary(left, right) ? (right as ColorLetter) : 'w'
-  }
-
-  if (isPrimary(left) && isPrimary(right)) {
-    if (left === right) {
-      return left as ColorLetter
-    }
-
-    const key = [left, right].sort().join('')
-    return PRIMARY_PAIR_TO_SECONDARY[key]
-  }
-
-  return left as ColorLetter
-}
-
-export class Pipe extends SimulatorNode<ColorEdge[], ColorEdge[]> {
+export class ColorMixer extends SimulatorNode<ColorEdge[], ColorEdge[]> {
   public inputEdges: ColorEdge[] = []
   public outputEdges: ColorEdge[] = []
   private delay = 0

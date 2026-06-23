@@ -3,7 +3,7 @@ import { SimulatorNode } from '../simulatorGraph/SimulatorNode.ts'
 
 const MAX_CAPACITY = 1200
 
-export class Pipe extends SimulatorNode<ColorEdge[], ColorEdge[]> {
+export class FluidLauncher extends SimulatorNode<ColorEdge[], ColorEdge[]> {
   public inputEdges: ColorEdge[] = []
   public outputEdges: ColorEdge[] = []
   private bufferedProduct: ColorProduct = { color: 'r', amount: 0 }
