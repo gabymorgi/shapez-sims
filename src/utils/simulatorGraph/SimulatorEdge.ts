@@ -18,15 +18,17 @@ export type Product = ShapeProduct | ColorProduct
 export type EdgeProductType = 'shape' | 'color'
 
 export abstract class SimulatorEdge<T extends Product = Product> {
-  public readonly fromId: string
-  public readonly toId: string
+  public fromId: string
+  public toId: string
   public readonly throughput: number
   public readonly edgeType: EdgeProductType
+  public id: string;
   protected product: T | null = null
 
   constructor(fromId: string, toId: string, edgeType: EdgeProductType, throughput = 120) {
     this.fromId = fromId
     this.toId = toId
+    this.id = `${fromId}->${toId}`
     this.edgeType = edgeType
     this.throughput = throughput
   }

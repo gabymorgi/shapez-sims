@@ -23,26 +23,21 @@ export class SimulatorGraph {
   constructor() {
     const map = new Map<NodeId, Node>()
 
-    // for (const node of nodes) {
-    //   if (map.has(node.id)) {
-    //     throw new Error(`Duplicate node id: ${node.id}`)
-    //   }
-    //   map.set(node.id, node)
-    // }
-
-    // SimulatorGraph.assertAdjacencyConsistency(map)
-    // SimulatorGraph.assertAcyclic(map)
-
     this.nodeMap = map
     this.edgeMap = new Map<string, Edge>()
+  }
 
-    // for (const node of map.values()) {
-    //   for (const outputId of node.outputIds) {
-    //     const edge = this.createEdge(node.id, outputId)
-    //     node.attachOutputEdge(edge)
-    //     this.getNodeOrThrow(outputId).attachInputEdge(edge)
-    //   }
-    // }
+  public clone(): SimulatorGraph {
+    const newGraph = new SimulatorGraph()
+
+    for (const node of this.nodeMap.values()) {
+      newGraph.addNode(node)
+    }
+    for (const edge of this.edgeMap.values()) {
+      newGraph.addEdge(edge.fromId, edge.toId, edge.edgeType)
+    }
+
+    return newGraph
   }
 
   public get size(): number {
@@ -51,6 +46,10 @@ export class SimulatorGraph {
 
   public get nodes(): Node[] {
     return Array.from(this.nodeMap.values())
+  }
+
+  public get edges(): Edge[] {
+    return Array.from(this.edgeMap.values())
   }
 
   public get roots(): Node[] {
@@ -116,7 +115,13 @@ export class SimulatorGraph {
     this.nodeMap.delete(nodeId)
   }
 
-  public addEdge(fromId: string, toId: string, edgeType: EdgeProductType): void {
+  public addEdge(
+    fromId: string,
+    toId: string,
+    edgeType: EdgeProductType,
+    inputIndex?: number,
+    outputIndex?: number
+  ): void {
     if (fromId === toId) {
       throw new Error('A node cannot be connected to itself.')
     }
@@ -134,9 +139,9 @@ export class SimulatorGraph {
 
     if (!SimulatorGraph.hasPath(this.nodeMap, toId, fromId)) {
       const edge = this.createEdge(fromId, toId, edgeType)
-      fromNode.attachOutputEdge(edge)
+      fromNode.attachOutputEdge(edge, outputIndex)
       try {
-        toNode.attachInputEdge(edge)
+        toNode.attachInputEdge(edge, inputIndex)
       } catch (error) {
         fromNode.detachOutputEdge(toId)
         throw error
@@ -308,7 +313,7 @@ export class SimulatorGraph {
     return false
   }
 
-  private optimizeBelts = (): void => {
+  public optimizeBelts = (): void => {
     for (const node of this.nodes) {
       if (node instanceof Belt && node.inputEdges.length === 1 && node.outputEdges.length === 1) {
         const inEdge = node.inputEdges[0];
@@ -322,36 +327,43 @@ export class SimulatorGraph {
     }
   };
 
-  private optimizePipes = (): void => {
+  public optimizePipes = (): void => {
+    // debugger;
     const visited = new Set<string>();
 
     for (const node of this.nodes) {
-      if (!(node instanceof Pipe) || visited.has(node.id)) continue;
+      const nodeType = node.constructor.name;
+      if (!(nodeType === 'Pipe' || nodeType === 'Belt') || visited.has(node.id)) continue;
 
       const cluster = new Set<string>();
       const stack = [node.id];
-      const inputNodes = new Set<string>();
-      const outputNodes = new Set<string>();
+      const inputNodes = new Map<string, number>();
+      const outputNodes = new Map<string, number>();
 
       while (stack.length > 0) {
         const currentId = stack.pop()!;
-        if (!visited.has(node.id)) {
+        if (!visited.has(currentId)) {
           visited.add(currentId);
           cluster.add(currentId);
 
-          for (const inputEdge of this.getNodeOrThrow(currentId).inputEdges) {
-            if (this.getNodeOrThrow(inputEdge.fromId) instanceof Pipe) {
+          const currentNode = this.getNodeOrThrow(currentId);
+          for (const inputEdge of currentNode.inputEdges) {
+            const inputNode = this.getNodeOrThrow(inputEdge.fromId);
+            if (inputNode.constructor.name === nodeType) {
               stack.push(inputEdge.fromId);
             } else {
-              inputNodes.add(inputEdge.fromId);
+              const edgeIndex = inputNode.outputEdges.findIndex((edge) => edge.toId === currentId);
+              inputNodes.set(inputEdge.fromId, edgeIndex);
             }
           }
 
-          for (const outputEdge of this.getNodeOrThrow(currentId).outputEdges) {
-            if (this.getNodeOrThrow(outputEdge.toId) instanceof Pipe) {
+          for (const outputEdge of currentNode.outputEdges) {
+            const outputNode = this.getNodeOrThrow(outputEdge.toId);
+            if (outputNode.constructor.name === nodeType) {
               stack.push(outputEdge.toId);
             } else {
-              outputNodes.add(outputEdge.toId);
+              const edgeIndex = outputNode.inputEdges.findIndex((edge) => edge.fromId === currentId);
+              outputNodes.set(outputEdge.toId, edgeIndex);
             }
           }
         }
@@ -371,12 +383,13 @@ export class SimulatorGraph {
         }
 
         // Connect all inputs and outputs to a single new Pipe node
-        this.addNode(new Pipe({ id: node.id }));
+        this.addNode(nodeType === 'Pipe' ? new Pipe({ id: node.id }) : new Belt({ id: node.id }));
+        const edgeType: EdgeProductType = nodeType === 'Pipe' ? 'color' : 'shape';
         for (const inputId of inputNodes) {
-          this.addEdge(inputId, node.id, 'color');
+          this.addEdge(inputId[0], node.id, edgeType, inputId[1]);
         }
         for (const outputId of outputNodes) {
-          this.addEdge(node.id, outputId, 'color');
+          this.addEdge(node.id, outputId[0], edgeType, undefined, outputId[1]);
         }
       }
     }

@@ -31,6 +31,13 @@ export class Cutter extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
     this.outputEdges[outputIndex] = edge
   }
 
+  public detachOutputEdge(toId: string): void {
+    const index = this.outputEdges.findIndex((edge) => edge?.fromId === this.id && edge?.toId === toId)
+    if (index >= 0) {
+      this.outputEdges[index] = undefined as unknown as ShapeEdge
+    }
+  }
+
   public simulate(): void {
     this.delay = Math.max(0, this.delay - 1)
     const inputEdge = this.inputEdges[0]
