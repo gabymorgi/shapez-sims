@@ -1,18 +1,11 @@
 import { shapeToCode } from '../Shape.ts'
 import type { SimulatorEdge } from '../simulatorGraph/SimulatorEdge.ts'
-import { SimulatorNode, type SimulatorNodeOptions } from '../simulatorGraph/SimulatorNode.ts'
+import { SimulatorNode } from '../simulatorGraph/SimulatorNode.ts'
 
-export class Trash extends SimulatorNode<SimulatorEdge[], SimulatorEdge[]> {
+export class Trash extends SimulatorNode {
   public inputEdges: SimulatorEdge[] = []
   public outputEdges: SimulatorEdge[] = []
-  private delay = 0
-  private maxDelay = 1
   public destroyedProducts = new Map<string, number>()
-
-  constructor(options: SimulatorNodeOptions, delay = 1) {
-    super(options)
-    this.maxDelay = delay
-  }
 
   protected canAcceptInputConnection(): boolean {
     return true
@@ -23,8 +16,7 @@ export class Trash extends SimulatorNode<SimulatorEdge[], SimulatorEdge[]> {
   }
 
   public simulate(): void {
-    this.delay = Math.max(0, this.delay - 1)
-    if (this.delay > 0) {
+    if (!super.isTickReady()) {
       return
     }
 
@@ -44,7 +36,7 @@ export class Trash extends SimulatorNode<SimulatorEdge[], SimulatorEdge[]> {
     }
 
     if (consumedProduct) {
-      this.delay = this.maxDelay
+      super.resetTick()
     }
   }
 }

@@ -1,17 +1,21 @@
 import type { ColorEdge, EdgeProductType } from '../simulatorGraph/SimulatorEdge.ts'
-import { SimulatorNode } from '../simulatorGraph/SimulatorNode.ts'
+import { SimulatorNode, type SimulatorNodeOptions } from '../simulatorGraph/SimulatorNode.ts'
 import { mixColors } from './utils.ts'
 
-const REQUIRED_COLOR_AMOUNT = 300
-const OUTPUT_CAPACITY = REQUIRED_COLOR_AMOUNT * 2
-const MAX_DELAY = 4
-
-
-
-export class ColorMixer extends SimulatorNode<ColorEdge[], ColorEdge[]> {
+export class ColorMixer extends SimulatorNode {
   public inputEdges: ColorEdge[] = []
   public outputEdges: ColorEdge[] = []
-  private delay = 0
+  private requiredColorAmount: number
+  private outputCapacity: number
+  
+  constructor(options: SimulatorNodeOptions) {
+    super({
+      delay: 1, //delay handled by requiredColorAmount
+      ...options,
+    })
+    this.requiredColorAmount = 75 * (options.multiplier ?? 1)
+    this.outputCapacity = this.requiredColorAmount * 2
+  }
 
   protected canAcceptInputConnection(edgeType: EdgeProductType): boolean {
     return edgeType === 'color' && this.inputEdges.length < 2
@@ -22,43 +26,30 @@ export class ColorMixer extends SimulatorNode<ColorEdge[], ColorEdge[]> {
   }
 
   public attachInputEdge(edge: ColorEdge, index?: number): void {
-    if (this.inputEdges.includes(edge)) {
-      return
-    }
-
-    const inputIndex = index || this.inputEdges.length
-    if (!this.canAcceptInputConnection(edge.edgeType)) {
-      throw new Error(`Node ${this.id} cannot accept ${edge.edgeType} input at index ${inputIndex}.`)
-    }
-
-    this.inputEdges.push(edge)
-    edge.capacity = REQUIRED_COLOR_AMOUNT
+    super.attachInputEdge(edge, index)
+    edge.capacity = this.requiredColorAmount
   }
 
   public simulate(): void {
-    this.delay = Math.max(0, this.delay - 1)
     const inputLeft = this.inputEdges[0]
     const inputRight = this.inputEdges[1]
     const outputEdge = this.outputEdges[0]
-    if (!inputLeft
-      || !inputRight
-      || !outputEdge
-      || this.delay > 0
-      || !inputRight.hasProduct
-      || !inputLeft.hasProduct
-      || outputEdge.hasProduct
+    if (!super.isTickReady()
+      || !inputLeft?.hasProduct
+      || !inputRight?.hasProduct
+      || outputEdge?.hasProduct === true
     ) {
       return
     }
 
-    const leftProduct = inputLeft.takeProduct(REQUIRED_COLOR_AMOUNT)!
-    const rightProduct = inputRight.takeProduct(REQUIRED_COLOR_AMOUNT)!
+    const leftProduct = inputLeft.takeProduct(this.requiredColorAmount)!
+    const rightProduct = inputRight.takeProduct(this.requiredColorAmount)!
     const mixedColor = mixColors(leftProduct.color, rightProduct.color)
 
-    this.delay = MAX_DELAY
+    super.resetTick()
     outputEdge.putProduct({
       color: mixedColor,
-      amount: OUTPUT_CAPACITY,
+      amount: this.outputCapacity,
     })
   }
 }

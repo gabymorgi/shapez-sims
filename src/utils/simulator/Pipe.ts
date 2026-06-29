@@ -1,7 +1,7 @@
 import type { ColorEdge, ColorProduct, EdgeProductType } from '../simulatorGraph/SimulatorEdge.ts'
 import { SimulatorNode } from '../simulatorGraph/SimulatorNode.ts'
 
-export class Pipe extends SimulatorNode<ColorEdge[], ColorEdge[]> {
+export class Pipe extends SimulatorNode {
   public inputEdges: ColorEdge[] = []
   public outputEdges: ColorEdge[] = []
 

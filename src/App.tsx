@@ -4,76 +4,57 @@ import type { SubmitEvent } from 'react'
 import {
   EncodedShape,
 } from './components/QuarterShapes'
-import { codeToShape } from './utils/Shape'
 import { SimulatorGraphVisualizer } from './components/SimulatorGraphVisualizer'
+import exampleGraphFactories from './utils/examples'
 import { SimulatorGraph } from './utils/simulatorGraph/SimulatorGraph.ts'
-import { Generator } from './utils/simulator/Generator.ts'
-import { Belt } from './utils/simulator/Belt.ts'
-import { Rotator } from './utils/simulator/Rotator.ts'
-import { Painter } from './utils/simulator/Painter.ts'
-import { Pipe } from './utils/simulator/Pipe.ts'
-import { ColorMixer } from './utils/simulator/ColorMixer.ts'
-import { Trash } from './utils/simulator/Trash.ts'
-import { Rotation, createColorProduct, createShapeProduct } from './utils/simulator/utils.ts'
-import { Cutter } from './utils/simulator/Cutter.ts'
 
-function createDemoSimulatorGraph(): SimulatorGraph {
-  const graph = new SimulatorGraph()
+type DemoGraphFactory = () => SimulatorGraph
 
-  graph.addNode(new Generator({ id: 'shape-source' }, createShapeProduct(codeToShape('CrRgSbWm'))))
-  graph.addNode(new Belt({ id: 'A' }))
-  graph.addNode(new Belt({ id: 'B' }))
-  graph.addNode(new Cutter({ id: 'C' }))
-  graph.addNode(new Belt({ id: 'D' }))
-  graph.addNode(new Belt({ id: 'E' }))
-  graph.addNode(new Belt({ id: 'F' }))
-  graph.addNode(new Belt({ id: 'G' }))
-  // graph.addNode(new Belt({ id: 'H' }))
-  graph.addNode(new Rotator({ id: 'I' }, Rotation.HalfTurn))
-  graph.addNode(new Belt({ id: 'J' }))
-  graph.addNode(new Belt({ id: 'K' }))
-  graph.addNode(new Cutter({ id: 'L' }))
-  graph.addNode(new Belt({ id: 'M' }))
-  graph.addNode(new Belt({ id: 'N' }))
-  graph.addNode(new Rotator({ id: 'O' }, Rotation.HalfTurn))
-  graph.addNode(new Belt({ id: 'P' }))
-
-  graph.addEdge('shape-source', 'A', 'shape')
-  graph.addEdge('A', 'B', 'shape')
-  graph.addEdge('B', 'C', 'shape')
-  graph.addEdge('B', 'G', 'shape')
-  graph.addEdge('C', 'D', 'shape', 0)
-  graph.addEdge('C', 'I', 'shape', 1)
-  graph.addEdge('D', 'E', 'shape')
-  graph.addEdge('E', 'F', 'shape')
-  graph.addEdge('G', 'K', 'shape')
-  graph.addEdge('K', 'L', 'shape')
-  graph.addEdge('I', 'J', 'shape')
-  graph.addEdge('J', 'E', 'shape')
-  graph.addEdge('L', 'M', 'shape', 0)
-  graph.addEdge('L', 'O', 'shape', 1)
-  graph.addEdge('M', 'N', 'shape')
-  graph.addEdge('O', 'P', 'shape')
-  graph.addEdge('P', 'N', 'shape')
-  graph.addEdge('N', 'J', 'shape')
-
-  return graph
+type DemoGraphOption = {
+  id: string
+  label: string
+  createGraph: DemoGraphFactory
 }
+
+function formatExampleLabel(exampleId: string): string {
+  return exampleId
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .trim()
+}
+
+const demoGraphOptions: DemoGraphOption[] = Object.entries(exampleGraphFactories)
+  .filter(([, graphFactory]) => typeof graphFactory === 'function')
+  .map(([id, graphFactory]) => ({
+    id,
+    label: formatExampleLabel(id),
+    createGraph: graphFactory as DemoGraphFactory,
+  }))
 
 function App() {
   const [newShapeCode, setNewShapeCode] = useState('')
   const [submittedShapes, setSubmittedShapes] = useState<string[]>([])
-  const demoGraphs: SimulatorGraph[] = useMemo(() => {
-    const g = createDemoSimulatorGraph()
-    g.optimizeBelts()
-    const h = createDemoSimulatorGraph()
-    h.optimizePipes()
-    return [
-      createDemoSimulatorGraph(),
-      // g,
-      h,
-    ]
-  }, [])
+  const [selectedExampleId, setSelectedExampleId] = useState<string>(demoGraphOptions[0]?.id ?? '')
+
+  const selectedExample = useMemo(
+    () => demoGraphOptions.find((option) => option.id === selectedExampleId),
+    [selectedExampleId]
+  )
+
+  const selectedGraphs = useMemo(() => {
+    if (!selectedExample) {
+      return null
+    }
+
+    const originalGraph = selectedExample.createGraph()
+    const optimizedGraph = selectedExample.createGraph()
+    optimizedGraph.optimizeBelts()
+    // optimizedGraph.optimizePipes()
+
+    return {
+      originalGraph,
+      optimizedGraph,
+    }
+  }, [selectedExample])
 
   function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -138,9 +119,29 @@ function App() {
         <p className="visualizer-description">
           Layered DAG rendering of a sample production line with shape and color flows.
         </p>
-        {demoGraphs.map((demoGraph, index) => (
-          <SimulatorGraphVisualizer graph={demoGraph} key={index} />
-        ))}
+        <div className="shape-form">
+          <label htmlFor="example-graph-select">Example graph</label>
+          <select
+            id="example-graph-select"
+            value={selectedExampleId}
+            onChange={(event) => setSelectedExampleId(event.target.value)}
+          >
+            {demoGraphOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {selectedGraphs && (
+          <>
+            <h3>Original</h3>
+            <SimulatorGraphVisualizer graph={selectedGraphs.originalGraph} />
+            <h3>Optimized</h3>
+            <SimulatorGraphVisualizer graph={selectedGraphs.optimizedGraph} />
+          </>
+        )}
       </section>
     </main>
   )

@@ -2,8 +2,6 @@ import type { EdgeProductType, ShapeEdge } from '../simulatorGraph/SimulatorEdge
 import { SimulatorNode, type SimulatorNodeOptions } from '../simulatorGraph/SimulatorNode.ts'
 import { stackShapes } from './utils.ts'
 
-
-
 export const StackerType = {
   Straight: 'Straight',
   Bent: 'Bent',
@@ -11,15 +9,15 @@ export const StackerType = {
 
 export type StackerType = (typeof StackerType)[keyof typeof StackerType]
 
-export class Stacker extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
-  public inputEdges: ShapeEdge[] = []
+export class Stacker extends SimulatorNode {
+  public inputEdges: [ShapeEdge?, ShapeEdge?] = []
   public outputEdges: ShapeEdge[] = []
-  private delay = 0
-  private maxDelay: number;
 
   constructor(options: SimulatorNodeOptions, type: StackerType = StackerType.Straight) {
-    super(options)
-    this.maxDelay = type === StackerType.Bent ? 4 : 6
+    super({
+      delay: type === StackerType.Bent ? 4 : 6,
+      ...options,
+    })
   }
 
   protected canAcceptInputConnection(edgeType: EdgeProductType, index: number): boolean {
@@ -43,16 +41,19 @@ export class Stacker extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
     this.inputEdges[inputIndex] = edge
   }
 
+  public detachInputEdge(fromId: string): void {
+    super.emptyInputEdge(fromId)
+  }
+
   public simulate(): void {
-    this.delay = Math.max(0, this.delay - 1)
     const inputBottom = this.inputEdges[0]
     const inputTop = this.inputEdges[1]
     const outputEdge = this.outputEdges[0]
 
-    if (!inputBottom || !inputTop || !outputEdge || this.delay > 0 || outputEdge.hasProduct || !inputBottom.hasProduct || !inputTop.hasProduct) {
+    if (super.isTickReady() || !inputBottom?.hasProduct || !inputTop?.hasProduct || outputEdge?.hasProduct === true) {
       return
     }
-    this.delay = this.maxDelay
+    super.resetTick()
 
     const bottomShape = inputBottom.takeProduct()!
     const topShape = inputTop.takeProduct()!

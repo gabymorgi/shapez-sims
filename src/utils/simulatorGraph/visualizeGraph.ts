@@ -144,7 +144,7 @@ function getGraphLanes2(
     return
   }
 
-  node.outputEdges.forEach((outputEdge, index) => {
+  node.outputs.forEach((outputEdge, index) => {
     if (index > 0) {
       laneCursor.value += 1
     }
@@ -167,7 +167,7 @@ function getGraphLanes(graph: SimulatorGraph): { laneByNodeId: Map<string, numbe
 
     laneByNodeId.set(rootId, laneCursor.value)
 
-    rootNode.outputEdges.forEach((outputEdge, outputIndex) => {
+    rootNode.outputs.forEach((outputEdge, outputIndex) => {
       if (outputIndex > 0) {
         laneCursor.value += 1
       }
@@ -202,10 +202,10 @@ export function buildGraphVisualizerLayout(
 
     const nodeType = node.constructor.name
     
-    const inputFlow = mergeFlow(node.inputEdges.map((edge) => edgeFlowById.get(edge.id) ?? new Map<string, number>()))
+    const inputFlow = mergeFlow(node.inputs.map((edge) => edgeFlowById.get(edge.id) ?? new Map<string, number>()))
     inputFlowByNodeId.set(nodeId, inputFlow)
 
-    const outputCount = node.outputEdges.length
+    const outputCount = node.outputs.length
     let outputFlow: ProductFlowMap = new Map<string, number>()
 
     switch (nodeType) {
@@ -221,10 +221,10 @@ export function buildGraphVisualizerLayout(
         break
       }
       default: {
-        if (node.inputEdges.length === 1) {
+        if (node.inputs.length === 1) {
           outputFlow = appendNodeLetter(inputFlow, nodeTypeLetter(nodeType))
         } else {
-          const inputFlow = mergeFlow(node.inputEdges.map((edge) => edgeFlowById.get(edge.id) ?? new Map<string, number>()))
+          const inputFlow = mergeFlow(node.inputs.map((edge) => edgeFlowById.get(edge.id) ?? new Map<string, number>()))
           inputFlowByNodeId.set(nodeId, inputFlow)
           const mergedHash: string = `(${[...inputFlow.keys()].sort().join('|')})`
           const minThroughput = Math.min(...[...inputFlow.values()])
@@ -237,7 +237,7 @@ export function buildGraphVisualizerLayout(
     outputFlowByNodeId.set(nodeId, outputFlow)
     const perEdgeFlow = divideFlow(outputFlow, outputCount)
 
-    for (const edge of node.outputEdges) {
+    for (const edge of node.outputs) {
       edgeFlowById.set(edge.id, perEdgeFlow)
     }
   }
@@ -250,7 +250,7 @@ export function buildGraphVisualizerLayout(
       continue
     }
 
-    const depth = node.inputEdges.reduce((maxDepth, inputEdge) => {
+    const depth = node.inputs.reduce((maxDepth, inputEdge) => {
       const parentDepth = depthById.get(inputEdge.fromId) ?? 0
       return Math.max(maxDepth, parentDepth + 1)
     }, 0)
@@ -278,8 +278,8 @@ export function buildGraphVisualizerLayout(
       lane,
       x: config.padding + depth * (config.nodeWidth + config.horizontalGap),
       y: config.padding + lane * (config.nodeHeight + config.verticalGap),
-      inputCount: node.inputEdges.length,
-      outputCount: node.outputEdges.length,
+      inputCount: node.inputs.length,
+      outputCount: node.outputs.length,
       inputHashFlow: formatHashFlow(inputFlowByNodeId.get(node.id) ?? new Map<string, number>()),
       outputHashFlow: formatHashFlow(outputFlowByNodeId.get(node.id) ?? new Map<string, number>()),
     })
@@ -287,7 +287,7 @@ export function buildGraphVisualizerLayout(
 
   const edges: GraphVisualizerEdge[] = []
   for (const node of graph.nodes) {
-    for (const edge of node.outputEdges) {
+    for (const edge of node.outputs) {
       const lane = laneByEdgeId.get(edge.id) ?? 0
       edges.push({
         id: `${edge.fromId}->${edge.toId}`,

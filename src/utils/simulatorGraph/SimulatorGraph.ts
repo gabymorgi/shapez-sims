@@ -13,15 +13,14 @@ import { Swapper } from '../simulator/Swapper.ts'
 type NodeId = string
 type VisitState = 'gray' | 'black'
 
-type Node = SimulatorNode<SimulatorEdge<Product>[], SimulatorEdge<Product>[]>
 type Edge = SimulatorEdge<Product>
 
 export class SimulatorGraph {
-  private readonly nodeMap: Map<NodeId, Node>
+  private readonly nodeMap: Map<NodeId, SimulatorNode>
   private readonly edgeMap: Map<string, Edge>
 
   constructor() {
-    const map = new Map<NodeId, Node>()
+    const map = new Map<NodeId, SimulatorNode>()
 
     this.nodeMap = map
     this.edgeMap = new Map<string, Edge>()
@@ -44,7 +43,7 @@ export class SimulatorGraph {
     return this.nodeMap.size
   }
 
-  public get nodes(): Node[] {
+  public get nodes(): SimulatorNode[] {
     return Array.from(this.nodeMap.values())
   }
 
@@ -52,16 +51,16 @@ export class SimulatorGraph {
     return Array.from(this.edgeMap.values())
   }
 
-  public get roots(): Node[] {
-    return this.nodes.filter((node) => node.inputEdges.length === 0)
+  public get roots(): SimulatorNode[] {
+    return this.nodes.filter((node) => node.inputs.length === 0)
   }
 
   public get rootIds(): string[] {
     return this.roots.map((node) => node.id)
   }
 
-  public get leaves(): Node[] {
-    return this.nodes.filter((node) => node.outputEdges.length === 0)
+  public get leaves(): SimulatorNode[] {
+    return this.nodes.filter((node) => node.outputs.length === 0)
   }
 
   public get leafIds(): string[] {
@@ -72,11 +71,11 @@ export class SimulatorGraph {
     return this.nodeMap.has(nodeId)
   }
 
-  public getNode(nodeId: string): Node | undefined {
+  public getNode(nodeId: string): SimulatorNode | undefined {
     return this.nodeMap.get(nodeId)
   }
 
-  private getNodeOrThrow(nodeId: string): Node {
+  private getNodeOrThrow(nodeId: string): SimulatorNode {
     const node = this.nodeMap.get(nodeId)
     if (!node) {
       throw new Error(`Unknown node: ${nodeId}`)
@@ -85,7 +84,7 @@ export class SimulatorGraph {
     return node
   }
 
-  public addNode(node: Node): void {
+  public addNode(node: SimulatorNode): void {
     if (this.nodeMap.has(node.id)) {
       throw new Error(`Node already exists: ${node.id}`)
     }
@@ -100,13 +99,13 @@ export class SimulatorGraph {
 
     const markedNode = this.getNodeOrThrow(nodeId)
 
-    for (const inputId of markedNode.inputEdges.map((edge) => edge.fromId)) {
+    for (const inputId of markedNode.inputs.map((edge) => edge.fromId)) {
       const inputNode = this.getNodeOrThrow(inputId)
       inputNode.detachOutputEdge(nodeId)
       this.edgeMap.delete(SimulatorGraph.edgeKey(inputId, nodeId))
     }
 
-    for (const outputId of markedNode.outputEdges.map((edge) => edge.toId)) {
+    for (const outputId of markedNode.outputs.map((edge) => edge.toId)) {
       const outputNode = this.getNodeOrThrow(outputId)
       outputNode.detachInputEdge(nodeId)
       this.edgeMap.delete(SimulatorGraph.edgeKey(nodeId, outputId))
@@ -194,7 +193,7 @@ export class SimulatorGraph {
     const indegrees = new Map<string, number>()
 
     for (const node of this.nodeMap.values()) {
-      indegrees.set(node.id, node.inputEdges.length)
+      indegrees.set(node.id, node.inputs.length)
     }
 
     const queue = Array.from(indegrees.entries())
@@ -213,7 +212,7 @@ export class SimulatorGraph {
 
       const node = this.getNodeOrThrow(nodeId)
 
-      for (const outputId of node.outputEdges.map((edge) => edge.toId)) {
+      for (const outputId of node.outputs.map((edge) => edge.toId)) {
         const current = indegrees.get(outputId)
         if (current === undefined) {
           continue
@@ -259,7 +258,7 @@ export class SimulatorGraph {
       throw new Error(`Unknown node: ${nodeId}`)
     }
 
-    for (const outputEdge of node.outputEdges) {
+    for (const outputEdge of node.outputs) {
       this.assertAcyclicForNode(outputEdge.toId, visitState)
     }
 
@@ -278,7 +277,7 @@ export class SimulatorGraph {
     }
   }
 
-  private static hasPath(nodeMap: Map<NodeId, Node>, fromId: string, targetId: string): boolean {
+  private static hasPath(nodeMap: Map<NodeId, SimulatorNode>, fromId: string, targetId: string): boolean {
     if (fromId === targetId) {
       return true
     }
@@ -299,7 +298,7 @@ export class SimulatorGraph {
         continue
       }
 
-      for (const nextId of currentNode.outputEdges.map((edge) => edge.toId)) {
+      for (const nextId of currentNode.outputs.map((edge) => edge.toId)) {
         if (nextId === targetId) {
           return true
         }
@@ -315,9 +314,9 @@ export class SimulatorGraph {
 
   public optimizeBelts = (): void => {
     for (const node of this.nodes) {
-      if (node instanceof Belt && node.inputEdges.length === 1 && node.outputEdges.length === 1) {
-        const inEdge = node.inputEdges[0];
-        const outEdge = node.outputEdges[0];
+      if (node instanceof Belt && node.inputs.length === 1 && node.outputs.length === 1) {
+        const inEdge = node.inputs[0];
+        const outEdge = node.outputs[0];
         
         this.removeEdge(inEdge.fromId, node.id);
         this.removeEdge(node.id, outEdge.toId);
@@ -347,22 +346,22 @@ export class SimulatorGraph {
           cluster.add(currentId);
 
           const currentNode = this.getNodeOrThrow(currentId);
-          for (const inputEdge of currentNode.inputEdges) {
+          for (const inputEdge of currentNode.inputs) {
             const inputNode = this.getNodeOrThrow(inputEdge.fromId);
             if (inputNode.constructor.name === nodeType) {
               stack.push(inputEdge.fromId);
             } else {
-              const edgeIndex = inputNode.outputEdges.findIndex((edge) => edge.toId === currentId);
+              const edgeIndex = inputNode.outputs.findIndex((edge) => edge.toId === currentId);
               inputNodes.set(inputEdge.fromId, edgeIndex);
             }
           }
 
-          for (const outputEdge of currentNode.outputEdges) {
+          for (const outputEdge of currentNode.outputs) {
             const outputNode = this.getNodeOrThrow(outputEdge.toId);
             if (outputNode.constructor.name === nodeType) {
               stack.push(outputEdge.toId);
             } else {
-              const edgeIndex = outputNode.inputEdges.findIndex((edge) => edge.fromId === currentId);
+              const edgeIndex = outputNode.inputs.findIndex((edge) => edge.fromId === currentId);
               outputNodes.set(outputEdge.toId, edgeIndex);
             }
           }
@@ -373,10 +372,10 @@ export class SimulatorGraph {
         // Remove all edges and nodes in the cluster
         for (const pipeId of cluster) {
           const pipeNode = this.getNodeOrThrow(pipeId);
-          for (const inputEdge of pipeNode.inputEdges) {
+          for (const inputEdge of pipeNode.inputs) {
             this.removeEdge(inputEdge.fromId, pipeId);
           }
-          for (const outputEdge of pipeNode.outputEdges) {
+          for (const outputEdge of pipeNode.outputs) {
             this.removeEdge(pipeId, outputEdge.toId);
           }
           this.removeNode(pipeId);
@@ -397,10 +396,10 @@ export class SimulatorGraph {
 
   private removeDeadEnds = (): void => {
     const deadEndNodeIds = this.nodes.filter((node) => {
-      if (node.inputEdges.length === 0 && !(node instanceof Generator)) {
+      if (node.inputs.length === 0 && !(node instanceof Generator)) {
         return true
       }
-      if (node.inputEdges.length === 1 && (node instanceof Stacker
+      if (node.inputs.length === 1 && (node instanceof Stacker
         || node instanceof Painter
         || node instanceof Crystalizer
         || node instanceof ColorMixer
@@ -408,7 +407,7 @@ export class SimulatorGraph {
       ) {
         return true
       }
-      if (node.outputEdges.length === 0 && !(node instanceof Trash)) {
+      if (node.outputs.length === 0 && !(node instanceof Trash)) {
         return true
       }
     }).map((node) => node.id);
@@ -418,14 +417,14 @@ export class SimulatorGraph {
     while (deadEndNodeIds.length > 0) {
       const nodeId = deadEndNodeIds.pop()!;
       const node = this.getNodeOrThrow(nodeId);
-      for (const inputEdge of node.inputEdges) {
+      for (const inputEdge of node.inputs) {
         this.removeEdge(inputEdge.fromId, nodeId);
         if (!visited.has(inputEdge.fromId)) {
           visited.add(inputEdge.fromId);
           deadEndNodeIds.push(inputEdge.fromId);
         }
       }
-      for (const outputEdge of node.outputEdges) {
+      for (const outputEdge of node.outputs) {
         this.removeEdge(nodeId, outputEdge.toId);
         if (!visited.has(outputEdge.toId)) {
           visited.add(outputEdge.toId);

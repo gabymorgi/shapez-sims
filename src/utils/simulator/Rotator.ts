@@ -2,16 +2,16 @@ import type { EdgeProductType, ShapeEdge } from '../simulatorGraph/SimulatorEdge
 import { SimulatorNode, type SimulatorNodeOptions } from '../simulatorGraph/SimulatorNode.ts'
 import { rotateShape, Rotation } from './utils.ts'
 
-const MAX_DELAY = 2
-
-export class Rotator extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
+export class Rotator extends SimulatorNode {
   public inputEdges: ShapeEdge[] = []
   public outputEdges: ShapeEdge[] = []
   public readonly rotation: Rotation
-  private delay = 0
 
   constructor(options: SimulatorNodeOptions, rotation: Rotation = Rotation.Clockwise) {
-    super(options)
+    super({
+      delay: 2,
+      ...options,
+    })
     this.rotation = rotation
   }
 
@@ -24,14 +24,13 @@ export class Rotator extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
   }
 
   public simulate(): void {
-    this.delay = Math.max(0, this.delay - 1)
     const inputEdge = this.inputEdges[0]
     const outputEdge = this.outputEdges[0]
-    if (this.delay > 0 || !outputEdge || !inputEdge || !inputEdge.hasProduct || outputEdge.hasProduct) {
+    if (super.isTickReady() || !inputEdge?.hasProduct || outputEdge?.hasProduct === true) {
       return
     }
 
-    this.delay = MAX_DELAY
+    super.resetTick()
     const product = inputEdge.takeProduct()!
     const rotated = {
       shape: rotateShape(product.shape, this.rotation)

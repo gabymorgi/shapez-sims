@@ -1,7 +1,7 @@
 import type { EdgeProductType, ShapeEdge, ShapeProduct } from '../simulatorGraph/SimulatorEdge.ts'
 import { SimulatorNode } from '../simulatorGraph/SimulatorNode.ts'
 
-export class Belt extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
+export class Belt extends SimulatorNode {
   public inputEdges: ShapeEdge[] = []
   public outputEdges: ShapeEdge[] = []
   private bufferedProduct: ShapeProduct | null = null

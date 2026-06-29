@@ -3,15 +3,16 @@ import { SimulatorNode, type SimulatorNodeOptions } from '../simulatorGraph/Simu
 import { crystalizeShape } from './utils.ts'
 
 const REQUIRED_COLOR_AMOUNT = 400
-const MAX_DELAY = 6
 
-export class Crystalizer extends SimulatorNode<[ShapeEdge, ColorEdge], ShapeEdge[]> {
-  public inputEdges: [ShapeEdge, ColorEdge] = [undefined, undefined] as unknown as [ShapeEdge, ColorEdge]
+export class Crystalizer extends SimulatorNode {
+  public inputEdges: [ShapeEdge?, ColorEdge?] = []
   public outputEdges: ShapeEdge[] = []
-  private delay = 0
 
   constructor(options: SimulatorNodeOptions) {
-    super(options)
+    super({
+      delay: 6,
+      ...options,
+    })
   }
 
   protected canAcceptInputConnection(edgeType: EdgeProductType): boolean {
@@ -53,29 +54,22 @@ export class Crystalizer extends SimulatorNode<[ShapeEdge, ColorEdge], ShapeEdge
   }
 
   public detachInputEdge(fromId: string): void {
-    const index = this.inputEdges.findIndex((edge) => edge?.fromId === fromId && edge?.toId === this.id)
-    if (index >= 0) {
-      this.inputEdges[index] = undefined as never
-    }
+    super.emptyInputEdge(fromId)
   }
 
   public simulate(): void {
-    this.delay = Math.max(0, this.delay - 1)
     const shapeEdge = this.inputEdges[0]
     const colorEdge = this.inputEdges[1]
     const outputEdge = this.outputEdges[0]
-    if (!shapeEdge
-      || !colorEdge
-      || !outputEdge
-      || this.delay > 0
-      || !colorEdge.hasProduct
-      || !shapeEdge.hasProduct
-      || outputEdge.hasProduct
+    if (!super.isTickReady()
+      || !shapeEdge?.hasProduct
+      || !colorEdge?.hasProduct
+      || !outputEdge?.hasProduct === true
     ) {
       return
     }
 
-    this.delay = MAX_DELAY
+    super.resetTick()
     const shapeInput = shapeEdge.takeProduct()!
     const colorProduct = colorEdge.takeProduct(REQUIRED_COLOR_AMOUNT)!
 

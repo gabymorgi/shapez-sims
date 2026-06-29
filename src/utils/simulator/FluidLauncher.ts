@@ -1,12 +1,19 @@
 import type { ColorEdge, ColorProduct, EdgeProductType } from '../simulatorGraph/SimulatorEdge.ts'
-import { SimulatorNode } from '../simulatorGraph/SimulatorNode.ts'
+import { SimulatorNode, type SimulatorNodeOptions } from '../simulatorGraph/SimulatorNode.ts'
 
-const MAX_CAPACITY = 1200
-
-export class FluidLauncher extends SimulatorNode<ColorEdge[], ColorEdge[]> {
+export class FluidLauncher extends SimulatorNode {
   public inputEdges: ColorEdge[] = []
   public outputEdges: ColorEdge[] = []
   private bufferedProduct: ColorProduct = { color: 'r', amount: 0 }
+  private capacity: number
+
+  constructor(options: SimulatorNodeOptions) {
+    super({
+      delay: 6,
+      ...options,
+    })
+    this.capacity = 1200 * (options.multiplier ?? 1)
+  }
 
   protected canAcceptInputConnection(edgeType: EdgeProductType): boolean {
     return edgeType === 'color'
@@ -17,7 +24,7 @@ export class FluidLauncher extends SimulatorNode<ColorEdge[], ColorEdge[]> {
   }
 
   public simulate(): void {
-    if (this.bufferedProduct.amount < MAX_CAPACITY) {
+    if (this.bufferedProduct.amount < this.capacity) {
       const inputProducts: Record<string, number> = this.inputEdges.reduce((products: Record<string, number>, edge) => {
         const product = edge.takeProduct()
         if (product) {
@@ -45,7 +52,7 @@ export class FluidLauncher extends SimulatorNode<ColorEdge[], ColorEdge[]> {
       return
     }
     
-    const outputAmount = Math.min(this.bufferedProduct.amount, MAX_CAPACITY) / this.outputEdges.length
+    const outputAmount = Math.min(this.bufferedProduct.amount, this.capacity) / this.outputEdges.length
 
     this.outputEdges.forEach((edge) => {
       edge.putProduct({

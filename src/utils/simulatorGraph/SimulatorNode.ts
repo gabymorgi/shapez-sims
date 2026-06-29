@@ -1,59 +1,68 @@
-import type { EdgeProductType, Product, SimulatorEdge } from './SimulatorEdge.ts'
+import type { EdgeProductType, SimulatorEdge } from './SimulatorEdge.ts'
 
 export interface SimulatorNodeOptions {
   id: string
-  throughput?: [number, number]
-  inputIds?: Iterable<string>
-  outputIds?: Iterable<string>
+  delay?: number
+  multiplier?: number
 }
 
-export type AnySimulatorEdge = SimulatorEdge<Product>
+export type MaybeSimulatorEdge = SimulatorEdge | undefined
 
-export abstract class SimulatorNode<T extends AnySimulatorEdge[], U extends AnySimulatorEdge[]> {
+export abstract class SimulatorNode {
   public readonly id: string
-  public abstract inputEdges: T
-  public abstract outputEdges: U
+  protected abstract inputEdges: MaybeSimulatorEdge[]
+  protected abstract outputEdges: MaybeSimulatorEdge[]
+  protected delay = 1
+  protected tick = 0
 
-  constructor({ id }: SimulatorNodeOptions) {
-    this.id = id
+  public get inputs(): SimulatorEdge[] {
+    return this.inputEdges.filter((edge) => edge !== undefined)
   }
 
-  protected canAcceptInputConnection(_edgeType: EdgeProductType, _inputIndex: number): boolean {
+  public get outputs(): SimulatorEdge[] {
+    return this.outputEdges.filter((edge) => edge !== undefined)
+  }
+
+  constructor({ id, delay, multiplier }: SimulatorNodeOptions) {
+    this.id = id
+    this.delay = (delay || 1) / (multiplier || 1)
+    this.tick = this.delay
+  }
+
+  protected canAcceptInputConnection(_edgeType: EdgeProductType, _inputIndex?: number): boolean {
     void _edgeType
     void _inputIndex
     return true
   }
 
-  protected canAcceptOutputConnection(_edgeType: EdgeProductType, _outputIndex: number): boolean {
+  protected canAcceptOutputConnection(_edgeType: EdgeProductType, _outputIndex?: number): boolean {
     void _edgeType
     void _outputIndex
     return true
   }
 
-  public attachInputEdge(edge: AnySimulatorEdge, index?: number): void {
-    if (this.inputEdges.includes(edge)) {
-      return
+  public attachInputEdge(edge: SimulatorEdge, index?: number): void {
+    if (!this.canAcceptInputConnection(edge.edgeType, index)) {
+      throw new Error(`Node ${this.id} cannot accept ${edge.edgeType} input at index ${index || this.inputEdges.length}.`)
     }
 
-    const inputIndex = index || this.inputEdges.length
-    if (!this.canAcceptInputConnection(edge.edgeType, inputIndex)) {
-      throw new Error(`Node ${this.id} cannot accept ${edge.edgeType} input at index ${inputIndex}.`)
+    if (index === undefined) {
+      this.inputEdges.push(edge)
+    } else {
+      this.inputEdges[index] = edge
     }
-
-    this.inputEdges.push(edge)
   }
 
-  public attachOutputEdge(edge: AnySimulatorEdge, index?: number): void {
-    if (this.outputEdges.includes(edge)) {
-      return
+  public attachOutputEdge(edge: SimulatorEdge, index?: number): void {
+    if (!this.canAcceptOutputConnection(edge.edgeType, index)) {
+      throw new Error(`Node ${this.id} cannot accept ${edge.edgeType} output at index ${index || this.outputEdges.length}.`)
     }
 
-    const outputIndex = index || this.outputEdges.length
-    if (!this.canAcceptOutputConnection(edge.edgeType, outputIndex)) {
-      throw new Error(`Node ${this.id} cannot accept ${edge.edgeType} output at index ${outputIndex}.`)
+    if (index === undefined) {
+      this.outputEdges.push(edge)
+    } else {
+      this.outputEdges[index] = edge
     }
-
-    this.outputEdges.push(edge)
   }
 
   public detachInputEdge(fromId: string): void {
@@ -68,6 +77,32 @@ export abstract class SimulatorNode<T extends AnySimulatorEdge[], U extends AnyS
     if (index >= 0) {
       this.outputEdges.splice(index, 1)
     }
+  }
+
+  protected emptyOutputEdge(toId: string): void {
+    const index = this.outputEdges.findIndex((edge) => edge?.fromId === this.id && edge?.toId === toId)
+    if (index >= 0) {
+      this.outputEdges[index] = undefined
+    }
+  }
+
+  protected emptyInputEdge(fromId: string): void {
+    const index = this.inputEdges.findIndex((edge) => edge?.fromId === fromId && edge?.toId === this.id)
+    if (index >= 0) {
+      this.inputEdges[index] = undefined
+    }
+  }
+
+  protected isTickReady(): boolean {
+    if (this.tick >= this.delay) {
+      return true
+    }
+    this.tick++
+    return false
+  }
+
+  protected resetTick(): void {
+    this.tick = 0
   }
 
   public abstract simulate(): void

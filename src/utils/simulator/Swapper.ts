@@ -1,16 +1,18 @@
 import { type Shape } from '../Shape.ts'
 import type { EdgeProductType, ShapeEdge } from '../simulatorGraph/SimulatorEdge.ts'
-import { SimulatorNode } from '../simulatorGraph/SimulatorNode.ts'
+import { SimulatorNode, type SimulatorNodeOptions } from '../simulatorGraph/SimulatorNode.ts'
 import { swapShapes } from './utils.ts'
 
-const MAX_DELAY = 4
+export class Swapper extends SimulatorNode {
+  public inputEdges: [ShapeEdge?, ShapeEdge?] = []
+  public outputEdges: [ShapeEdge?, ShapeEdge?] = []
 
-
-
-export class Swapper extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
-  public inputEdges: ShapeEdge[] = []
-  public outputEdges: ShapeEdge[] = []
-  private delay = 0
+  constructor(options: SimulatorNodeOptions) {
+    super({
+      delay: 4,
+      ...options,
+    })
+  }
 
   protected canAcceptInputConnection(edgeType: EdgeProductType, index: number): boolean {
     return edgeType === 'shape' && this.inputEdges[index] === undefined
@@ -33,6 +35,10 @@ export class Swapper extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
     this.inputEdges[inputIndex] = edge
   }
 
+  public detachInputEdge(fromId: string): void {
+    super.emptyInputEdge(fromId)
+  }
+
   public attachOutputEdge(edge: ShapeEdge, index: number): void {
     if (this.outputEdges.includes(edge)) {
       return
@@ -46,12 +52,15 @@ export class Swapper extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
     this.outputEdges[outputIndex] = edge
   }
 
+  public detachOutputEdge(toId: string): void {
+    super.emptyOutputEdge(toId)
+  }
+
   public simulate(): void {
-    this.delay = Math.max(0, this.delay - 1)
     const inputLeft = this.inputEdges[0]
     const inputRight = this.inputEdges[1]
 
-    if (!inputLeft || !inputRight || this.delay > 0) {
+    if (super.isTickReady() || !inputLeft || !inputRight) {
       return
     }
 
@@ -72,7 +81,7 @@ export class Swapper extends SimulatorNode<ShapeEdge[], ShapeEdge[]> {
       return
     }
 
-    this.delay = MAX_DELAY
+    super.resetTick()
     inputLeft.takeProduct()
     inputRight.takeProduct()
 
