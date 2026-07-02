@@ -312,16 +312,138 @@ export class SimulatorGraph {
     return false
   }
 
+  public optimize = (): void => {
+    this.removeDeadEnds()
+    this.optimizeBelts()
+    this.optimizePipes()
+    this.assertAcyclic()
+  }
+
+  // optimize redundant conections
   public optimizeBelts = (): void => {
+    // debugger;
+    const visited = new Set<string>();
+
     for (const node of this.nodes) {
-      if (node instanceof Belt && node.inputs.length === 1 && node.outputs.length === 1) {
-        const inEdge = node.inputs[0];
-        const outEdge = node.outputs[0];
+      if (!(node instanceof Belt) || visited.has(node.id)) continue;
+      if (node.inputs.length === 1) {
+
+        let beginNode = this.getNodeOrThrow(node.id);
+        let firstStackNodeId: string;
+        do {
+          firstStackNodeId = beginNode.id;
+          beginNode = this.getNodeOrThrow(beginNode.inputs[0].fromId)
+        } while (beginNode instanceof Belt && beginNode.inputs.length === 1);
+
+        const stack = [firstStackNodeId];
+        const cluster = new Set<string>();
+        // there could be multiple conections to the same node
+        const outputs = new Map<string, number | undefined>();
         
-        this.removeEdge(inEdge.fromId, node.id);
-        this.removeEdge(node.id, outEdge.toId);
-        this.removeNode(node.id);
-        this.addEdge(inEdge.fromId, outEdge.toId, inEdge.edgeType);
+        while (stack.length > 0) {
+          const currentId = stack.pop()!;
+          cluster.add(currentId);
+          visited.add(currentId);
+
+          const currentNode = this.getNodeOrThrow(currentId);
+          for (const outputEdge of currentNode.outputs) {
+            const outputNode = this.getNodeOrThrow(outputEdge.toId);
+            if (outputNode instanceof Belt) {
+              if (outputNode.inputs.length === 1) {
+                stack.push(outputEdge.toId);
+              } else {
+                outputs.set(outputEdge.toId, undefined);
+              }
+            } else {
+              const edgeIndex = outputNode.inputs.findIndex((edge) => edge.fromId === currentId);
+              outputs.set(outputEdge.toId, edgeIndex);
+            }
+          }
+        }
+
+        if (cluster.size > 1) {
+          // Remove all edges and nodes in the cluster
+          
+          if (!(beginNode instanceof Belt)) {
+            cluster.delete(firstStackNodeId);
+            beginNode = this.getNodeOrThrow(firstStackNodeId);
+          }
+          
+          for (const beltId of cluster) {
+            const beltNode = this.getNodeOrThrow(beltId);
+            for (const inputEdge of beltNode.inputs) {
+              this.removeEdge(inputEdge.fromId, beltId);
+            }
+            for (const outputEdge of beltNode.outputs) {
+              this.removeEdge(beltId, outputEdge.toId);
+            }
+            this.removeNode(beltId);
+          }
+
+          // Connect all outputs to a single new Belt node
+          
+          for (const outputId of outputs) {
+            this.addEdge(beginNode.id, outputId[0], 'shape', undefined, outputId[1]);
+          }
+        }
+      } else if (node.outputs.length === 1) {
+        let endNode = this.getNodeOrThrow(node.id);
+        let firstStackNodeId: string;
+        do {
+          firstStackNodeId = endNode.id;
+          endNode = this.getNodeOrThrow(endNode.outputs[0].fromId)
+        } while (endNode instanceof Belt && endNode.outputs.length === 1);
+
+        const stack = [firstStackNodeId];
+        const cluster = new Set<string>();
+        const inputs = new Map<string, number | undefined>();
+        
+        while (stack.length > 0) {
+          const currentId = stack.pop()!;
+          cluster.add(currentId);
+          visited.add(currentId);
+
+          const currentNode = this.getNodeOrThrow(currentId);
+          for (const inputEdge of currentNode.inputs) {
+            const inputNode = this.getNodeOrThrow(inputEdge.toId);
+            if (inputNode instanceof Belt) {
+              if (inputNode.outputs.length === 1) {
+                stack.push(inputEdge.toId);
+              } else {
+                inputs.set(inputEdge.toId, undefined);
+              }
+            } else {
+              const edgeIndex = inputNode.outputs.findIndex((edge) => edge.fromId === currentId);
+              inputs.set(inputEdge.toId, edgeIndex);
+            }
+          }
+        }
+
+        if (cluster.size > 1) {
+          // Remove all edges and nodes in the cluster
+          
+          if (!(endNode instanceof Belt)) {
+            cluster.delete(firstStackNodeId);
+            endNode = this.getNodeOrThrow(firstStackNodeId);
+          }
+          
+          for (const beltId of cluster) {
+            const beltNode = this.getNodeOrThrow(beltId);
+            for (const inputEdge of beltNode.inputs) {
+              this.removeEdge(inputEdge.fromId, beltId);
+            }
+            for (const outputEdge of beltNode.outputs) {
+              this.removeEdge(beltId, outputEdge.toId);
+            }
+            this.removeNode(beltId);
+          }
+
+          // Connect all inputs to a single new Belt node
+          
+          for (const inputId of inputs) {
+            this.addEdge(endNode.id, inputId[0], 'shape', inputId[1]);
+          }
+        }
       }
     }
   };
@@ -331,8 +453,7 @@ export class SimulatorGraph {
     const visited = new Set<string>();
 
     for (const node of this.nodes) {
-      const nodeType = node.constructor.name;
-      if (!(nodeType === 'Pipe' || nodeType === 'Belt') || visited.has(node.id)) continue;
+      if (!(node instanceof Pipe) || visited.has(node.id)) continue;
 
       const cluster = new Set<string>();
       const stack = [node.id];
@@ -348,7 +469,7 @@ export class SimulatorGraph {
           const currentNode = this.getNodeOrThrow(currentId);
           for (const inputEdge of currentNode.inputs) {
             const inputNode = this.getNodeOrThrow(inputEdge.fromId);
-            if (inputNode.constructor.name === nodeType) {
+            if (inputNode instanceof Pipe) {
               stack.push(inputEdge.fromId);
             } else {
               const edgeIndex = inputNode.outputs.findIndex((edge) => edge.toId === currentId);
@@ -358,7 +479,7 @@ export class SimulatorGraph {
 
           for (const outputEdge of currentNode.outputs) {
             const outputNode = this.getNodeOrThrow(outputEdge.toId);
-            if (outputNode.constructor.name === nodeType) {
+            if (outputNode instanceof Pipe) {
               stack.push(outputEdge.toId);
             } else {
               const edgeIndex = outputNode.inputs.findIndex((edge) => edge.fromId === currentId);
@@ -382,13 +503,12 @@ export class SimulatorGraph {
         }
 
         // Connect all inputs and outputs to a single new Pipe node
-        this.addNode(nodeType === 'Pipe' ? new Pipe({ id: node.id }) : new Belt({ id: node.id }));
-        const edgeType: EdgeProductType = nodeType === 'Pipe' ? 'color' : 'shape';
+        this.addNode(new Pipe({ id: node.id }));
         for (const inputId of inputNodes) {
-          this.addEdge(inputId[0], node.id, edgeType, inputId[1]);
+          this.addEdge(inputId[0], node.id, 'color', inputId[1]);
         }
         for (const outputId of outputNodes) {
-          this.addEdge(node.id, outputId[0], edgeType, undefined, outputId[1]);
+          this.addEdge(node.id, outputId[0], 'color', undefined, outputId[1]);
         }
       }
     }
@@ -432,6 +552,40 @@ export class SimulatorGraph {
         }
       }
       this.removeNode(nodeId);
+    }
+  }
+
+  private squash = (): void => {
+    const roots = this.roots
+    const leaves = this.leaves
+
+    for (const root of roots) {
+      const stack = [root.id]
+      while (stack.length > 0) {
+        const currentId = stack.pop()!
+        const currentNode = this.getNodeOrThrow(currentId)
+        const bucket = new Map<string, number>()
+        /**
+         * what do I need?
+         * node signature
+         * a set of nodeIds
+         */
+        for (const outputEdge of currentNode.outputs) {
+          const outputNode = this.getNodeOrThrow(outputEdge.toId)
+          const outputNodeType = outputNode.constructor.name
+          if (outputNodeType !== 'Pipe' && outputNodeType !== 'Belt') {
+            const edgeIndex = outputNode.inputs.findIndex((edge) => edge.fromId === currentId)
+            // stack.push(outputEdge.toId)
+            const existing = bucket.get(outputNodeType)
+            if (existing !== undefined) {
+              bucket.set(outputNodeType, existing + 1)
+            } else {
+              bucket.set(outputNodeType, 1)
+            }
+          }
+        }
+        // if bucket has only one type of node, current is belt, and inputs are 1, remove itself
+      }
     }
   }
 }
